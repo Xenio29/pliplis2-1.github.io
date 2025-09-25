@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Courses - Liste</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
     <script>
         // Rendu spécifique à la page des courses
@@ -29,11 +30,11 @@
                     const li=document.createElement('li');
                     li.innerHTML=`
                         <label class="checkbox-container">
-                            <input type="checkbox" ${it.bought?'checked':''} onchange="toggleBought(${it.id})">
+                            <input type="checkbox" ${it.bought?'checked':''} onchange="toggleBought('${it.id}')">
                             <span class="checkbox-checkmark"></span>
                             <strong>${it.title}</strong> ${it.quantity? '('+it.quantity+')':''} ${it.note? '- '+it.note:''}
                         </label>
-                        <button class="btn" onclick="deleteCourse(${it.id})"><span>Supprimer</span></button>`;
+                        <button class="btn" onclick="deleteCourse('${it.id}')"><span>Supprimer</span></button>`;
                     ul.appendChild(li);
                 });
                 

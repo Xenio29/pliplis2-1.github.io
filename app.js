@@ -490,127 +490,116 @@ function initResponsiveSidebar(){
 document.addEventListener('DOMContentLoaded', initResponsiveSidebar);
 window.toggleSidebar = toggleSidebar;
 
-/* ===== API BACKEND (MySQL via PHP) ===== */
-const API_BASE = 'backend/api.php';
-const API_KEY  = '9f4c2d8e7a0b1f73c6d41ea0b9f58d3370b2c4f9e6d1a3b487c0f5e29ab37d11';
-
-async function apiRequest(entity, {method='GET', id=null, data=null} = {}){
-	const url = new URL(API_BASE, window.location.href);
-	url.searchParams.set('entity', entity);
-	if(id) url.searchParams.set('id', id);
-	const opt = {
-		method,
-		headers:{
-			'X-API-KEY': API_KEY,
-			'Accept':'application/json'
-		}
-	};
-	if(data){
-		opt.headers['Content-Type']='application/json';
-		opt.body = JSON.stringify(data);
-	}
-	const r = await fetch(url.toString(), opt);
-	if(!r.ok) throw new Error('api_error');
-	return await r.json();
+/* ===== SUPABASE (GitHub Pages) ===== */
+// Inclure dans chaque page AVANT app.js:
+// <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+const SUPABASE_URL = 'https://krvjftzgfqloxuxcncms.supabase.co'; // <-- remplacer
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtydmpmdHpnZnFsb3h1eGNuY21zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg4MDE4MTEsImV4cCI6MjA3NDM3NzgxMX0.XiFQDOX2w7LDWwiQLlZRnVlOc-2J9z-GYSo82-YkOCI';            // <-- remplacer
+let supabaseClient = null;
+if (window.supabase) {
+	supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} else {
+	console.warn('Supabase library not loaded (ajoute le script CDN avant app.js)');
 }
 
-/* ===== Data layer override ===== */
+/* ===== (Ancienne API PHP désactivée) ===== */
+// const API_BASE = 'backend/api.php'; // obsolète sur GitHub Pages
+
+/* ===== Data layer via Supabase (avec fallback localStorage) ===== */
 async function fetchTasks(){
-	try{
-		const rows = await apiRequest('tasks');
-		return rows.map(r=>({
-			id:+r.id,
-			title:r.title,
-			frequency:{value:+r.freq_value, unit:r.freq_unit},
-			room:r.room,
-			lastDone:r.last_done? new Date(r.last_done).getTime(): Date.now(),
-			finished:!!+r.finished
-		}));
-	}catch(e){
-		// fallback local
-		const d = loadData(); return d.tasks;
-	}
+	if(!supabaseClient) { const d = loadData(); return d.tasks; }
+	const { data, error } = await supabaseClient
+		.from('tasks')
+		.select('*')
+		.order('created_at',{ ascending:false });
+	if(error){ console.warn('tasks fallback local', error); const d = loadData(); return d.tasks; }
+	return data.map(r=>({
+		id: r.id,                       // UUID
+		title: r.title,
+		frequency: { value: r.freq_value, unit: r.freq_unit },
+		room: r.room,
+		lastDone: r.last_done ? Date.parse(r.last_done) : Date.now(),
+		finished: !!r.finished
+	}));
 }
 
 async function fetchCourses(){
-	try{
-		const rows = await apiRequest('courses');
-		return rows.map(r=>({
-			id:+r.id,
-			title:r.title,
-			quantity:r.quantity,
-			category:r.category,
-			note:r.note,
-			bought:!!+r.bought
-		}));
-	}catch(e){
-		const d = loadData(); return d.courses;
-	}
+	if(!supabaseClient){ const d = loadData(); return d.courses; }
+	const { data, error } = await supabaseClient
+		.from('courses')
+		.select('*')
+		.order('created_at',{ ascending:false });
+	if(error){ console.warn('courses fallback local', error); const d = loadData(); return d.courses; }
+	return data.map(r=>({
+		id:r.id,
+		title:r.title,
+		quantity:r.quantity,
+		category:r.category,
+		note:r.note,
+		bought:!!r.bought
+	}));
 }
 
 async function fetchMeals(){
-	try{
-		return await apiRequest('meals');
-	}catch(e){
-		return []; // plus de fallback local maintenant
-	}
+	if(!supabaseClient) return [];
+	const { data, error } = await supabaseClient
+		.from('meals')
+		.select('*')
+		.order('day',{ ascending:true })
+		.order('moment',{ ascending:true });
+	if(error){ console.warn('meals error', error); return []; }
+	return data;
 }
 
-/* Remplace loadData (asynchrone) */
 async function loadDataAsync(){
 	const [tasks, courses] = await Promise.all([fetchTasks(), fetchCourses()]);
 	return { tasks, courses };
 }
-// conserver l’ancien loadData sync pour compat héritée (mais déconseillé)
-function loadData() {
-    const t = localStorage.getItem(TASKS_KEY);
-    const c = localStorage.getItem(COURSES_KEY);
-    let tasks = t ? JSON.parse(t) : DEFAULT_TASKS;
-    let courses = c ? JSON.parse(c) : DEFAULT_COURSES;
-    return { tasks, courses };
-}
 
-/* ===== CRUD TASKS (API) ===== */
+/* ===== CRUD TASKS (Supabase) ===== */
 async function createTask(task){
-	await apiRequest('tasks',{method:'POST', data:{
-		title:task.title,
-		freq_value:task.frequency.value,
-		freq_unit:task.frequency.unit,
-		room:task.room,
-		last_done:new Date(task.lastDone).toISOString().slice(0,19).replace('T',' '),
-		finished:task.finished?1:0
-	}});
+	if(!supabaseClient) return;
+	await supabaseClient.from('tasks').insert([{
+		title: task.title,
+		freq_value: task.frequency.value,
+		freq_unit: task.frequency.unit,
+		room: task.room,
+		last_done: new Date(task.lastDone).toISOString(),
+		finished: task.finished
+	}]);
 }
 async function updateTask(task){
-	await apiRequest('tasks',{method:'PUT', id:task.id, data:{
-		title:task.title,
-		freq_value:task.frequency.value,
-		freq_unit:task.frequency.unit,
-		room:task.room,
-		last_done:new Date(task.lastDone).toISOString().slice(0,19).replace('T',' '),
-		finished:task.finished?1:0
-	}});
+	if(!supabaseClient) return;
+	await supabaseClient.from('tasks').update({
+		title: task.title,
+		freq_value: task.frequency.value,
+		freq_unit: task.frequency.unit,
+		room: task.room,
+		last_done: new Date(task.lastDone).toISOString(),
+		finished: task.finished
+	}).eq('id', task.id);
 }
 async function removeTask(id){
-	await apiRequest('tasks',{method:'DELETE', id});
+	if(!supabaseClient) return;
+	await supabaseClient.from('tasks').delete().eq('id', id);
 }
 
-/* Hook existantes -> API */
-const _origAddTaskFromForm = addTaskFromForm;
+/* Hooks réécrits (UUID) */
 addTaskFromForm = async function(e){
 	e.preventDefault();
 	const title = document.getElementById('t-title').value.trim();
 	const periodValue = parseInt(document.getElementById('t-period').value);
 	const room = document.getElementById('t-room').value;
-	const task = {
+	if(!title) return;
+	await createTask({
 		title,
 		frequency:{value:periodValue, unit:'days'},
 		room,
 		lastDone: Date.now(),
 		finished:false
-	};
-	await createTask(task);
+	});
 	if(typeof renderTasks==='function') renderTasks(true);
+	if(typeof renderHome==='function') renderHome();
 	e.target.reset();
 };
 
@@ -619,11 +608,11 @@ markTaskToggle = async function(id){
 	const t = tasks.find(x=>x.id===id);
 	if(!t) return;
 	if(!t.finished){
-		t.finished=true;
-		t.lastDone=Date.now();
+		t.finished = true;
+		t.lastDone = Date.now();
 	}else{
-		t.finished=false;
-		t.lastDone=Date.now();
+		t.finished = false;
+		t.lastDone = Date.now();
 	}
 	await updateTask(t);
 	if(typeof renderTasks==='function') renderTasks(true);
@@ -647,15 +636,18 @@ resetTaskTimer = async function(id){
 	if(typeof renderHome==='function') renderHome();
 };
 
-/* ===== COURSES CRUD (API) ===== */
+/* ===== COURSES CRUD (Supabase) ===== */
 async function createCourse(item){
-	await apiRequest('courses',{method:'POST', data:item});
+	if(!supabaseClient) return;
+	await supabaseClient.from('courses').insert([item]);
 }
 async function updateCourse(item){
-	await apiRequest('courses',{method:'PUT', id:item.id, data:item});
+	if(!supabaseClient) return;
+	await supabaseClient.from('courses').update(item).eq('id', item.id);
 }
 async function deleteCourseApi(id){
-	await apiRequest('courses',{method:'DELETE', id});
+	if(!supabaseClient) return;
+	await supabaseClient.from('courses').delete().eq('id', id);
 }
 
 toggleBought = async function(id){
@@ -689,29 +681,29 @@ addCourseFromForm = async function(e){
 		quantity:c_qty.value.trim(),
 		category:c_category.value,
 		note:c_note.value.trim(),
-		bought:0
+		bought:false
 	});
 	e.target.reset();
 	if(typeof renderCourses==='function') renderCourses(true);
+	if(typeof renderHome==='function') renderHome();
 };
 
-/* ===== MEALS CRUD (API) ===== */
+/* ===== MEALS CRUD (Supabase) ===== */
 async function createMeal(day,moment,meal,week_offset){
-	await apiRequest('meals',{method:'POST', data:{day,moment,meal,week_offset}});
+	if(!supabaseClient) return;
+	await supabaseClient.from('meals').insert([{day,moment,meal,week_offset}]);
 }
 async function updateMeal(id,day,moment,meal,week_offset){
-	await apiRequest('meals',{method:'PUT', id, data:{day,moment,meal,week_offset}});
+	if(!supabaseClient) return;
+	await supabaseClient.from('meals').update({day,moment,meal,week_offset}).eq('id', id);
 }
 async function deleteMealApi(id){
-	await apiRequest('meals',{method:'DELETE', id});
+	if(!supabaseClient) return;
+	await supabaseClient.from('meals').delete().eq('id', id);
 }
 
 window.fetchMeals = fetchMeals;
 window.createMeal = createMeal;
 window.updateMeal = updateMeal;
 window.deleteMealApi = deleteMealApi;
-
-/* Export new async loader */
 window.loadDataAsync = loadDataAsync;
-
-// ...existing code...

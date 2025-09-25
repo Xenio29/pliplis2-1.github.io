@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestion des tâches ménagères</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
     <script>
         /* Theme init (shared) */
@@ -78,7 +79,7 @@
         })();
 
         // Rendus spécifiques à la page d'accueil
-        function renderHomeTasks(containerId = 'home-task-list') {
+        function renderHomeTasks(containerId='home-task-list') {
             const { tasks } = loadData();
             const listEl = document.getElementById(containerId);
             if (!listEl) return;
@@ -100,11 +101,10 @@
                         `<div class="progress-mini" data-progress="${progress}">
                             <div class="bar" style="width:${progress}%;"></div>
                         </div>
-                        <span>${Math.abs(remainingDays)} jour(s) ${remainingDays < 0 ? 'de retard' : 'restant(s)'}</span>`
-                    }
+                        <span>${Math.abs(remainingDays)} jour(s) ${remainingDays < 0 ? 'de retard' : 'restant(s)'}</span>`}
                     <div class="task-actions">
-                        <button class="btn" onclick="markTaskToggle(${task.id})"><span>${task.finished ? 'Annuler' : 'Fini'}</span></button>
-                        <button class="btn" onclick="deleteTask(${task.id})"><span>Supprimer</span></button>
+                        <button class="btn" onclick="markTaskToggle('${task.id}')"><span>${task.finished ? 'Annuler' : 'Fini'}</span></button>
+                        <button class="btn" onclick="deleteTask('${task.id}')"><span>Supprimer</span></button>
                     </div>
                 `;
                 
@@ -120,7 +120,7 @@
             if (!toShow.length) listEl.innerHTML = '<li>Aucune tâche</li>';
         }
 
-        function renderHomeCourses(containerId = 'home-course-list') {
+        function renderHomeCourses(containerId='home-course-list') {
             const { courses } = loadData();
             const listEl = document.getElementById(containerId);
             if (!listEl) return;
@@ -141,7 +141,7 @@
                     span.style.marginRight = '8px';
                     span.innerHTML = `
                         ${it.title} ${it.quantity ? '('+it.quantity+')' : ''} 
-                        <button class="btn" onclick="toggleBought(${it.id})"><span>${it.bought ? 'Annuler' : 'Acheté'}</span></button>
+                        <button class="btn" onclick="toggleBought('${it.id}')"><span>${it.bought ? 'Annuler' : 'Acheté'}</span></button>
                     `;
                     catEl.appendChild(span);
                 });
