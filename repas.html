@@ -94,9 +94,19 @@
         async function renderMeals(){
         	const meals = await loadMeals();
         	const weekOffset = parseInt(document.getElementById('week-selector').value,10);
-        	const container = document.getElementById('meals-grid');
-        	if(!container) return;
-        	container.innerHTML = '';
+        	const grid = document.getElementById('meals-grid');
+        	const mobile = document.getElementById('meals-mobile');
+
+        	if(isMobileMeals()){
+        		if(grid) grid.style.display='none';
+        		if(mobile) mobile.style.display='block';
+        		renderMealsMobile(meals, weekOffset);
+        		updateWeekDisplay();
+        		return;
+        	}else{
+        		if(grid) grid.style.display='';
+        		if(mobile) mobile.style.display='none';
+        	}
 
         	// ENTETE
         	const headerRow = document.createElement('div');
@@ -311,6 +321,8 @@ function changeWeek(delta){
                 </div>
 
                 <div id="meals-grid" class="meals-grid"></div>
+                <!-- Vue mobile empilée (affichée seulement en small screens) -->
+                <div id="meals-mobile" class="meals-mobile"></div>
             </section>
         </main>
     </div>
