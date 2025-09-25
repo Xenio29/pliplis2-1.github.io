@@ -30,222 +30,12 @@
             });
         })();
     </script>
-    <script defer>
-        // Jours de la semaine (du lundi au dimanche)
-        const DAYS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
-        const MOMENTS = ['midi', 'soir'];
-        const MEALS_KEY = 'home_meals_v1';
-
-        // Fonctions pour les repas (adaptées de repas.html)
-        function loadMeals() {
-            const m = localStorage.getItem(MEALS_KEY);
-            return m ? JSON.parse(m) : [];
-        }
-
-        function getWeekOffset(date) {
-            const startOfYear = new Date(date.getFullYear(), 0, 1);
-            const days = Math.floor((date - startOfYear) / (24 * 60 * 60 * 1000));
-            return Math.floor(days / 7);
-        }
-
-        function getDateForDay(dayIndex, weekOffset = 0) {
-            const today = new Date();
-            const currentDay = today.getDay();
-            const daysSinceMonday = currentDay === 0 ? -6 : 1 - currentDay;
-            const monday = new Date(today);
-            monday.setDate(today.getDate() + daysSinceMonday);
-            
-            const targetDate = new Date(monday);
-            targetDate.setDate(monday.getDate() + (weekOffset * 7) + dayIndex);
-            return targetDate;
-        }
-
-        function isToday(dayIndex, weekOffset = 0) {
-            const today = new Date();
-            const targetDate = getDateForDay(dayIndex, weekOffset);
-            return today.toDateString() === targetDate.toDateString();
-        }
-
-        // Adapters pour compatibilité noms de fonctions issus de app.js
-        (function(){
-            document.addEventListener('DOMContentLoaded', () => {
-                if (typeof deleteTask === 'undefined' && typeof deleteTaskById === 'function') {
-                    window.deleteTask = deleteTaskById;
-                }
-                if (typeof toggleBought === 'undefined' && typeof toggleCourseBought === 'function') {
-                    window.toggleBought = toggleCourseBought;
-                }
-            });
-        })();
-
-        // Rendus spécifiques à la page d'accueil
-        function renderHomeTasks(containerId='home-task-list') {
-            const { tasks } = loadData();
-            const listEl = document.getElementById(containerId);
-            if (!listEl) return;
-            listEl.innerHTML = '';
-            
-            const sorted = tasks.slice().sort((a, b) => progressPercent(b).progress - progressPercent(a).progress);
-            const toShow = sorted.slice(0, 3);
-            
-            toShow.forEach(task => {
-                const { progress, remainingDays } = progressPercent(task);
-                const isOverdue = remainingDays < 0;
-                const li = document.createElement('li');
-                li.className = 'task ' + (task.finished ? 'finished' : 'pending');
-                
-                li.innerHTML = `
-                    <strong>${task.title}</strong> - ${task.room}
-                    ${isOverdue ? 
-                        `<span style="color:red;font-weight:bold;margin-left:8px;">Tu es en retard !</span>` :
-                        `<div class="progress-mini" data-progress="${progress}">
-                            <div class="bar" style="width:${progress}%;"></div>
-                        </div>
-                        <span>${Math.abs(remainingDays)} jour(s) ${remainingDays < 0 ? 'de retard' : 'restant(s)'}</span>`}
-                    <div class="task-actions">
-                        <button class="btn" onclick="markTaskToggle('${task.id}')"><span>${task.finished ? 'Annuler' : 'Fini'}</span></button>
-                        <button class="btn" onclick="deleteTask('${task.id}')"><span>Supprimer</span></button>
-                    </div>
-                `;
-                
-                if (isOverdue) {
-                    li.style.color = 'red';
-                    li.style.fontSize = '1.1em';
-                    li.style.fontWeight = 'bold';
-                }
-                
-                listEl.appendChild(li);
-            });
-            
-            if (!toShow.length) listEl.innerHTML = '<li>Aucune tâche</li>';
-        }
-
-        function renderHomeCourses(containerId='home-course-list') {
-            const { courses } = loadData();
-            const listEl = document.getElementById(containerId);
-            if (!listEl) return;
-            listEl.innerHTML = '';
-            
-            const groups = {};
-            courses.forEach(c => {
-                (groups[c.category] = groups[c.category] || []).push(c);
-            });
-            
-            Object.keys(groups).sort().forEach(cat => {
-                const items = groups[cat].slice(0, 3);
-                const catEl = document.createElement('div');
-                catEl.innerHTML = `<strong>${cat}</strong>: `;
-                
-                items.forEach(it => {
-                    const span = document.createElement('span');
-                    span.style.marginRight = '8px';
-                    span.innerHTML = `
-                        ${it.title} ${it.quantity ? '('+it.quantity+')' : ''} 
-                        <button class="btn" onclick="toggleBought('${it.id}')"><span>${it.bought ? 'Annuler' : 'Acheté'}</span></button>
-                    `;
-                    catEl.appendChild(span);
-                });
-                
-                listEl.appendChild(catEl);
-            });
-            
-            if (!Object.keys(groups).length) listEl.innerHTML = '<div>Aucun article</div>';
-        }
-
-        function renderHomeMeals(containerId = 'home-meals-list') {
-            const meals = loadMeals();
-            const container = document.getElementById(containerId);
-            if (!container) return;
-            container.innerHTML = '';
-
-            const today = new Date();
-            const daysToShow = 2; // aujourd'hui + demain
-            const dayBlocks = [];
-
-            for (let i = 0; i < daysToShow; i++) {
-                const date = new Date(today);
-                date.setDate(today.getDate() + i);
-
-                const dayIndex = date.getDay() === 0 ? 6 : date.getDay() - 1; // lundi=0
-                const dayName = DAYS[dayIndex];
-                const weekOffset = getWeekOffset(date) - getWeekOffset(today);
-
-                const entry = {
-                    date,
-                    dateStr: date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' }),
-                    isToday: i === 0,
-                    moments: MOMENTS.map(moment => {
-                        const meal = meals.find(m =>
-                            m.day === dayName &&
-                            m.moment === moment &&
-                            m.weekOffset === weekOffset
-                        );
-                        return {
-                            moment,
-                            hasMeal: !!meal,
-                            mealText: meal ? meal.meal : 'À définir'
-                        };
-                    })
-                };
-                dayBlocks.push(entry);
-            }
-
-            dayBlocks.forEach(block => {
-                const wrapper = document.createElement('div');
-                wrapper.className = 'home-meal-date';
-                const header = document.createElement('div');
-                header.className = 'home-meal-date-header' + (block.isToday ? ' today' : '');
-                header.innerHTML = `<strong>${block.dateStr}</strong>`;
-                wrapper.appendChild(header);
-
-                block.moments.forEach(m => {
-                    const row = document.createElement('div');
-                    row.className = 'home-meal-item';
-                    row.innerHTML = `
-                        <span class="home-meal-moment">${m.moment.charAt(0).toUpperCase()+m.moment.slice(1)} :</span>
-                        <span class="home-meal-text">${m.mealText}</span>
-                    `;
-                    wrapper.appendChild(row);
-                });
-
-                container.appendChild(wrapper);
-            });
-        }
-
-        function renderWeather(containerId = 'home-weather') {
-            const container = document.getElementById(containerId);
-            if (!container) return;
-            container.innerHTML = '<div>Chargement météo...</div>';
-
-            // Simulation d'appel API
-            setTimeout(() => {
-                const weatherData = [
-                    { day: 'Aujourd\'hui', temp: 18, condition: 'Ensoleillé' },
-                    { day: 'Demain', temp: 20, condition: 'Partiellement nuageux' }
-                ];
-
-                container.innerHTML = '';
-                weatherData.forEach(day => {
-                    const div = document.createElement('div');
-                    div.className = 'weather-day';
-                    div.innerHTML = `
-                        <div>${day.day}</div>
-                        <div>${day.temp}°C</div>
-                        <div>${day.condition}</div>
-                    `;
-                    container.appendChild(div);
-                });
-            }, 1000);
-        }
-
-        function renderHome(){
-            renderHomeTasks();
-            renderHomeCourses();
-            renderHomeMeals();
-            renderWeather('home-weather'); // renders compact variant
-        }
-        document.addEventListener('DOMContentLoaded', ()=>renderHome());
-    </script>
+    <script>
+	document.addEventListener('DOMContentLoaded', ()=>{
+		if(typeof renderHome === 'function') renderHome();          // tâches + courses + repas (Supabase)
+		if(typeof renderWeather === 'function') renderWeather('home-weather'); // météo compacte
+	});
+	</script>
 </head>
 <body>
 	<!-- Ajout responsive sidebar -->
@@ -280,22 +70,21 @@
 			<div class="dashboard-grid">
 				<section class="card card--wide">
 					<h2>Tâches urgentes</h2>
-					<ul id="home-task-list"></ul>
+					<div id="home-tasks-list"></div> <!-- remplacé (était ul#home-task-list) -->
 					<a href="taches.html">Voir Tout</a>
 				</section>
 
-				<!-- Weather compact card (replaces previous header + widget combo) -->
 				<section id="home-weather" class="home-weather-section"></section>
 
 				<section class="card">
 					<h2>Courses (aperçu)</h2>
-					<div id="home-course-list"></div>
+					<div id="home-courses-list"></div> <!-- remplacé (était div#home-course-list) -->
 					<a href="courses.html">Voir Tout</a>
 				</section>
 
 				<section class="card card--wide">
-					<h2>Repas à venir (2 prochains jours)</h2>
-					<div id="home-meals-list"></div>
+					<h2>Repas à venir</h2>
+					<div id="home-upcoming-meals"></div> <!-- remplacé (était div#home-meals-list) -->
 					<a href="repas.html">Voir la planification complète</a>
 				</section>
 			</div>
