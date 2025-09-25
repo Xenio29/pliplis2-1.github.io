@@ -735,3 +735,286 @@ window.createMeal = createMeal;
 window.updateMeal = updateMeal;
 window.deleteMealApi = deleteMealApi;
 window.loadDataAsync = loadDataAsync;
+
+/* === MEALS HOMEPAGE UPCOMING === */
+const MEALS_DAYS = ['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'];
+const MEAL_MOMENT_ORDER = { midi:0, soir:1 };
+let MEALS_CACHE_SUP = { ts:0, data:[] };
+const MEALS_CACHE_TTL = 30_000;
+
+async function getMealsCached(){
+	if(Date.now() - MEALS_CACHE_SUP.ts < MEALS_CACHE_TTL) return MEALS_CACHE_SUP.data;
+	const rows = await fetchMeals();        // utilise déjà Supabase
+	MEALS_CACHE_SUP = { ts:Date.now(), data:rows };
+	return rows;
+}
+
+function mondayOfWeek(base = new Date()){
+	const d = new Date(base);
+	const jsDay = d.getDay(); // 0=dim
+	const delta = jsDay === 0 ? -6 : (1 - jsDay);
+	d.setHours(0,0,0,0);
+	d.setDate(d.getDate()+delta);
+	return d;
+}
+
+function mealToDate(meal){
+	const baseMonday = mondayOfWeek();
+	const dayIndex = MEALS_DAYS.indexOf(meal.day);
+	if(dayIndex < 0) return null;
+	const dt = new Date(baseMonday);
+	dt.setDate(dt.getDate() + meal.week_offset*7 + dayIndex);
+	dt.setHours(meal.moment === 'midi' ? 11 : 18, 0, 0, 0);
+	return dt;
+}
+
+function groupUpcomingMeals(meals, daysAhead = 7){
+	const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
+	const end = new Date(todayMidnight); end.setDate(end.getDate()+daysAhead);
+	const filtered = meals
+		.map(m => ({...m, _date: mealToDate(m)}))
+		.filter(m => m._date && m._date >= todayMidnight && m._date < end)
+		.sort((a,b)=>{
+			if(a._date.getTime() === b._date.getTime()){
+				return MEAL_MOMENT_ORDER[a.moment]-MEAL_MOMENT_ORDER[b.moment];
+			}
+			return a._date - b._date;
+		});
+	const byDay = {};
+	filtered.forEach(m=>{
+		const key = m._date.toISOString().slice(0,10);
+		(byDay[key] = byDay[key] || []).push(m);
+	});
+	return { byDay, order:Object.keys(byDay).sort() };
+}
+
+function formatFrDateLabel(iso){
+	const d = new Date(iso);
+	const opts = { weekday:'long', day:'numeric', month:'short' };
+	let label = d.toLocaleDateString('fr-FR', opts);
+	label = label.charAt(0).toUpperCase()+label.slice(1);
+	const today = new Date(); today.setHours(0,0,0,0);
+	if(d.getTime() === today.getTime()) label += " (Aujourd'hui)";
+	return label;
+}
+
+async function renderHomeMeals(){
+	const container = document.getElementById('home-upcoming-meals');
+	if(!container) return;
+	container.innerHTML = '<div class="home-meal-date">Chargement des repas...</div>';
+	const meals = await getMealsCached();
+	const { byDay, order } = groupUpcomingMeals(meals, 7);
+	if(!order.length){
+		container.innerHTML = '<div class="home-meal-date"><em>Aucun repas planifié.</em></div>';
+		return;
+	}
+	container.innerHTML = '';
+	order.forEach(dayIso=>{
+		const block = document.createElement('div');
+		block.className='home-meal-date';
+		const header = document.createElement('div');
+		header.className='home-meal-date-header';
+		if(new Date(dayIso).toDateString() === new Date().toDateString()) header.classList.add('today');
+		header.textContent = formatFrDateLabel(dayIso);
+		block.appendChild(header);
+		byDay[dayIso].forEach(m=>{
+			const line = document.createElement('div');
+			line.className='home-meal-item';
+			line.innerHTML = `
+				<div class="home-meal-moment">${m.moment === 'midi' ? 'Midi' : 'Soir'}</div>
+				<div class="home-meal-text">${m.meal}</div>
+			`;
+			block.appendChild(line);
+		});
+		container.appendChild(block);
+	});
+}
+
+/* Rendu accueil global (sécurise les appels existants) */
+async function renderHome(force=false){
+	// ...tu peux ajouter d'autres rendus (tâches, courses) si nécessaires...
+	await renderHomeMeals();
+}
+window.renderHomeMeals = renderHomeMeals;
+window.renderHome = renderHome;
+
+// Relance après opérations modifiant les repas
+async function refreshMealsHomeIfNeeded(){
+	if(document.getElementById('home-upcoming-meals')) renderHomeMeals();
+}
+window.addEventListener('focus', refreshMealsHomeIfNeeded);
+
+// Hook: quand repas modifiés dans d’autres pages, ces fonctions existent déjà (repas.html utilise createMeal/updateMeal/delete)
+const _origCreateMeal = window.createMeal;
+window.createMeal = async (...args)=>{ await _origCreateMeal(...args); MEALS_CACHE_SUP.ts=0; refreshMealsHomeIfNeeded(); };
+const _origUpdateMeal = window.updateMeal;
+window.updateMeal = async (...args)=>{ await _origUpdateMeal(...args); MEALS_CACHE_SUP.ts=0; refreshMealsHomeIfNeeded(); };
+const _origDeleteMealApi = window.deleteMealApi;
+window.deleteMealApi = async (...args)=>{ await _origDeleteMealApi(...args); MEALS_CACHE_SUP.ts=0; refreshMealsHomeIfNeeded(); };
+
+// Initialisation: s’assurer que l’accueil se remplit si présent
+document.addEventListener('DOMContentLoaded', ()=>{ if(document.getElementById('home-upcoming-meals')) renderHomeMeals(); });
+
+/* === HOMEPAGE TASKS & COURSES === */
+/* Conteneurs attendus dans index.html :
+   <div id="home-tasks-list"></div>
+   <div id="home-courses-list"></div>
+*/
+
+async function renderHomeTasks(){
+	const box = document.getElementById('home-tasks-list');
+	if(!box) return;
+	box.innerHTML = '<div class="small">Chargement des tâches...</div>';
+	const tasks = await fetchTasks();
+	// Filtrer tâches en cours (non finies)
+	const active = tasks.filter(t=>!t.finished);
+	if(!active.length){
+		box.innerHTML = '<div class="small"><em>Aucune tâche en cours.</em></div>';
+		return;
+	}
+	// Calcul progression / tri (plus urgent d’abord)
+	const enriched = active.map(t=>{
+		const { progress, remainingDays } = progressPercent(t);
+		return { t, progress, remainingDays };
+	}).sort((a,b)=> a.remainingDays - b.remainingDays);
+
+	box.innerHTML = '';
+	enriched.slice(0,10).forEach(({t,progress,remainingDays})=>{
+		const row = document.createElement('div');
+		row.className = 'home-task-row';
+		row.innerHTML = `
+			<div class="home-task-main">
+				<strong>${t.title}</strong>
+				<span class="home-task-meta">${remainingDays<=0?'À faire maintenant':('Restant: '+remainingDays+'j')}</span>
+			</div>
+			<div class="home-task-bar">
+				<div class="home-task-bar-fill" style="width:${progress}%;"></div>
+			</div>
+			<div class="home-task-actions">
+				<button class="btn-small" style="padding:4px 6px;font-size:.65rem;" onclick="markTaskToggle(${t.id})">✔</button>
+			</div>
+		`;
+		box.appendChild(row);
+	});
+}
+
+async function renderHomeCourses(){
+	const box = document.getElementById('home-courses-list');
+	if(!box) return;
+	box.innerHTML = '<div class="small">Chargement des courses...</div>';
+	const courses = await fetchCourses();
+	const pending = courses.filter(c=>!c.bought);
+	if(!pending.length){
+		box.innerHTML = '<div class="small"><em>Aucun article à acheter.</em></div>';
+		return;
+	}
+	// Regrouper par catégorie
+	const groups = {};
+	pending.forEach(c=>{ (groups[c.category||'Autres'] = groups[c.category||'Autres'] || []).push(c); });
+	const orderedCats = Object.keys(groups).sort();
+	box.innerHTML = '';
+	orderedCats.forEach(cat=>{
+		const catBlock = document.createElement('div');
+		catBlock.className = 'home-course-cat';
+		catBlock.innerHTML = `<div class="home-course-cat-title">${cat}</div>`;
+		groups[cat].slice(0,15).forEach(it=>{
+			const line = document.createElement('div');
+			line.className = 'home-course-item';
+			line.innerHTML = `
+				<label class="home-course-check">
+					<input type="checkbox" onchange="toggleBought(${it.id})">
+					<span>${it.title}${it.quantity? ' ('+it.quantity+')':''}</span>
+				</label>
+			`;
+			catBlock.appendChild(line);
+		});
+		box.appendChild(catBlock);
+	});
+}
+
+/* Styles minimalistes injectés si pas encore présents (évite modifier CSS si oublié) */
+(function ensureHomeMiniStyles(){
+	if(document.getElementById('home-mini-styles')) return;
+	const style = document.createElement('style');
+	style.id = 'home-mini-styles';
+	style.textContent = `
+		#home-tasks-list, #home-courses-list { display:flex; flex-direction:column; gap:10px; }
+		.home-task-row{
+			background:color-mix(in srgb,var(--panel) 90%, transparent);
+			border:1px solid var(--glass-border);
+			padding:10px 12px 12px;
+			border-radius:14px;
+			display:grid;
+			grid-template-columns:1fr auto;
+			gap:8px 12px;
+			align-items:center;
+			position:relative;
+		}
+		.home-task-main{ display:flex; flex-direction:column; gap:4px; font-size:.8rem; }
+		.home-task-main strong{ font-size:.82rem; }
+		.home-task-meta{ font-size:.65rem; opacity:.7; letter-spacing:.5px; }
+		.home-task-bar{
+			grid-column:1 / span 2;
+			height:6px;
+			background:color-mix(in srgb,var(--accent) 15%, transparent);
+			border-radius:4px;
+			overflow:hidden;
+			position:relative;
+		}
+		.home-task-bar-fill{
+			height:100%;
+			background:linear-gradient(90deg,var(--accent),var(--accent-mix));
+			transition:width .5s;
+		}
+		.home-task-actions{ display:flex; gap:6px; }
+		.home-course-cat{
+			background:color-mix(in srgb,var(--panel) 92%, transparent);
+			border:1px solid var(--glass-border);
+			border-radius:14px;
+			padding:10px 12px;
+			display:flex;
+			flex-direction:column;
+			gap:6px;
+		}
+		.home-course-cat-title{
+			font-weight:600;
+			font-size:.75rem;
+			text-transform:uppercase;
+			letter-spacing:.6px;
+			opacity:.75;
+			margin-bottom:2px;
+		}
+		.home-course-item{
+			font-size:.78rem;
+			display:flex;
+		}
+		.home-course-check{
+			display:flex;
+			align-items:center;
+			gap:6px;
+			cursor:pointer;
+			user-select:none;
+		}
+		.home-course-check input{ accent-color:var(--accent); width:14px; height:14px; }
+	`;
+	document.head.appendChild(style);
+})();
+
+/* Étendre renderHome pour inclure tasks & courses */
+const _renderHomeOrig = typeof renderHome === 'function' ? renderHome : async function(){};
+async function renderHome(force=false){
+	await Promise.all([
+		renderHomeMeals(),      // déjà présent
+		renderHomeTasks(),
+		renderHomeCourses()
+	]);
+}
+window.renderHome = renderHome;
+
+/* Auto-render si conteneurs présents */
+document.addEventListener('DOMContentLoaded', ()=>{
+	if(document.getElementById('home-tasks-list') || document.getElementById('home-courses-list'))
+		renderHome();
+});
+
+// Après CRUD courses / tasks on appelait déjà renderHome -> mise à jour immédiate
