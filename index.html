@@ -7,6 +7,13 @@
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
+    <!-- Init rendu accueil -->
+    <script>
+    document.addEventListener('DOMContentLoaded', ()=>{
+        if(typeof renderHome==='function') renderHome();
+        if(typeof renderWeather==='function') renderWeather('home-weather');
+    });
+    </script>
     <script>
         /* Theme init (shared) */
         (function(){
@@ -30,12 +37,6 @@
             });
         })();
     </script>
-    <script>
-	document.addEventListener('DOMContentLoaded', ()=>{
-		if(typeof renderHome === 'function') renderHome();          // tâches + courses + repas (Supabase)
-		if(typeof renderWeather === 'function') renderWeather('home-weather'); // météo compacte
-	});
-	</script>
 </head>
 <body>
 	<!-- Ajout responsive sidebar -->
@@ -74,18 +75,21 @@
 					<a href="taches.html">Voir Tout</a>
 				</section>
 
-				<section id="home-weather" class="home-weather-section"></section>
+				<section id="home-weather" class="card">
+					<h2>Météo</h2>
+					<!-- rendu météo injecté ici -->
+				</section>
 
 				<section class="card">
-					<h2>Courses (aperçu)</h2>
+					<h2>Courses à acheter</h2>
 					<div id="home-courses-list"></div> <!-- remplacé (était div#home-course-list) -->
-					<a href="courses.html">Voir Tout</a>
+					<a href="courses.html">Voir la liste complète</a>
 				</section>
 
 				<section class="card card--wide">
-					<h2>Repas à venir</h2>
+					<h2>Repas à venir (7 jours)</h2>
 					<div id="home-upcoming-meals"></div> <!-- remplacé (était div#home-meals-list) -->
-					<a href="repas.html">Voir la planification complète</a>
+					<a href="repas.html">Planification complète</a>
 				</section>
 			</div>
 		</main>
