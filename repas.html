@@ -156,6 +156,7 @@
         	const weekOffset = parseInt(document.getElementById('week-selector').value,10);
         	const grid = document.getElementById('meals-grid');
         	const mobile = document.getElementById('meals-mobile');
+        	const vertical = document.getElementById('meals-vertical');
 
         	/* MODIF: on force l'affichage de la grille aussi sur mobile */
         	if(mobile) mobile.style.display='none';
@@ -354,25 +355,24 @@ function changeWeek(delta){
             <h1>Planification des repas</h1>
 
             <section class="card">
-                <div class="meals-controls">
-                    <div class="week-navigation">
-                        <button id="prev-week" class="btn" onclick="changeWeek(-1)"><span>← Semaine précédente</span></button>
-                        <div class="week-display">
-                            <span id="week-display"></span>
-                            <select id="week-selector" class="week-selector">
-                                <option value="0">Cette semaine</option>
-                                <option value="1">Semaine prochaine</option>
-                            </select>
-                        </div>
-                        <button id="next-week" class="btn" onclick="changeWeek(1)"><span>Semaine suivante →</span></button>
-                    </div>
-                    <button id="add-meal-btn" class="btn"><span>+ Ajouter un repas</span></button>
-                </div>
+				<div class="meals-controls">
+					<div class="week-navigation">
+						<button id="prev-week" class="btn" onclick="changeWeek(-1)"><span>← Semaine précédente</span></button>
+						<div class="week-display">
+							<span id="week-display"></span>
+							<select id="week-selector" class="week-selector">
+								<option value="0">Cette semaine</option>
+								<option value="1">Semaine prochaine</option>
+							</select>
+						</div>
+						<button id="next-week" class="btn" onclick="changeWeek(1)"><span>Semaine suivante →</span></button>
+					</div>
+					<button id="add-meal-btn" class="btn"><span>+ Ajouter un repas</span></button>
+				</div>
 
-                <div id="meals-grid" class="meals-grid"></div>
-                <!-- Vue mobile empilée (affichée seulement en small screens) -->
-                <div id="meals-mobile" class="meals-mobile"></div>
-            </section>
+				<div id="meals-grid" class="meals-grid"></div>
+				<div id="meals-vertical" class="meals-vertical"></div> <!-- nouveau conteneur vertical -->
+			</section>
         </main>
     </div>
 	<!-- Modal pour ajouter/modifier un repas -->

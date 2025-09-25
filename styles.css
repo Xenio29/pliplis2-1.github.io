@@ -2018,3 +2018,133 @@ html[data-theme="dark"] .weather-compact{
 	/* Masquer la vue mobile alternative si encore présente */
 	.meals-mobile{ display:none !important; }
 }
+
+/* === Vue verticale repas mobile (jours empilés) === */
+.meals-vertical{ display:none; }
+
+@media (max-width:780px){
+	.meals-grid{ display:none !important; }
+	.meals-vertical{
+		display:flex;
+		flex-direction:column;
+		gap:18px;
+	}
+
+	.meal-day-card{
+		background:var(--panel);
+		border:1px solid var(--glass-border);
+		border-radius:18px;
+		padding:14px 16px 16px;
+		display:flex;
+		flex-direction:column;
+		gap:12px;
+		position:relative;
+	}
+	.meal-day-card.today{
+		box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 55%, transparent);
+	}
+	.meal-day-card.past{ opacity:.75; }
+	.meal-day-card.future{}
+
+	.meal-day-header{
+		font-weight:700;
+		font-size:1rem;
+		letter-spacing:.4px;
+		text-transform:capitalize;
+	}
+
+	.meal-day-slots{
+		display:flex;
+		gap:14px;
+	}
+
+	.meal-slot{
+		flex:1;
+		min-height:92px;
+		border:1px dashed var(--input-border);
+		border-radius:16px;
+		background:color-mix(in srgb,var(--panel) 85%, transparent);
+		padding:10px 10px 12px;
+		display:flex;
+		flex-direction:column;
+		justify-content:flex-start;
+		gap:8px;
+		position:relative;
+		transition:.25s background, .25s border-color;
+	}
+	.meal-slot.slot-today{
+		border-color:color-mix(in srgb,var(--accent) 55%, var(--input-border));
+	}
+	.meal-slot.has-meal{
+		border-style:solid;
+		border-color:color-mix(in srgb,var(--accent) 38%, var(--input-border));
+		background:color-mix(in srgb,var(--accent) 18%, var(--panel));
+	}
+
+	.meal-slot-head{
+		display:flex;
+		align-items:center;
+		justify-content:space-between;
+		gap:10px;
+	}
+
+	.meal-slot-label{
+		font-size:.65rem;
+		text-transform:uppercase;
+		letter-spacing:.55px;
+		font-weight:700;
+		opacity:.75;
+	}
+	.meal-slot.has-meal .meal-slot-label{ opacity:.9; }
+
+	.meal-slot-text{
+		font-size:.75rem;
+		line-height:1.25;
+		font-weight:600;
+		word-break:break-word;
+	}
+
+	.meal-slot-actions{
+		display:flex;
+		gap:6px;
+	}
+
+	.meal-slot-btn{
+		width:30px;
+		height:30px;
+		border:0;
+		border-radius:10px;
+		background:linear-gradient(145deg,var(--accent),var(--accent-mix));
+		color:#fff;
+		font-size:.8rem;
+		cursor:pointer;
+		display:flex;
+		align-items:center;
+		justify-content:center;
+		transition:.22s opacity;
+	}
+	.meal-slot-btn:hover{ opacity:.85; }
+
+	.meal-slot-add{
+		width:48px;
+		height:48px;
+		margin:2px auto 0;
+		border-radius:14px;
+		border:2px dashed var(--input-border);
+		background:transparent;
+		color:var(--text);
+		font-size:1.6rem;
+		font-weight:600;
+		cursor:pointer;
+		display:flex;
+		align-items:center;
+		justify-content:center;
+		transition:.25s background, .25s border-color, .25s transform;
+	}
+	.meal-slot-add:hover{
+		border-color:var(--accent);
+		background:color-mix(in srgb,var(--accent) 18%, transparent);
+		color:#fff;
+	}
+	.meal-slot-add:active{ transform:scale(.9); }
+}
