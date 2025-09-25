@@ -91,6 +91,66 @@
         	});
         }
 
+        function isMobileMeals(){
+        	return window.matchMedia('(max-width:780px)').matches;
+        }
+
+        /* Vue mobile: 1 section par jour avec deux slots (midi / soir) */
+        function renderMealsMobile(meals, weekOffset){
+        	const mobile = document.getElementById('meals-mobile');
+        	if(!mobile) return;
+        	mobile.innerHTML = '';
+        	for(let dayIndex=0; dayIndex<7; dayIndex++){
+        		const day = DAYS[dayIndex];
+        		const dateObj = getDateForDay(dayIndex, weekOffset);
+        		const dateStr = dateObj.toLocaleDateString('fr-FR',{ weekday:'long', day:'numeric', month:'short' });
+
+        		const wrap = document.createElement('div');
+        		wrap.className = 'mobile-day';
+        		if(isToday(dayIndex, weekOffset)) wrap.classList.add('today');
+
+        		const header = document.createElement('div');
+        		header.className = 'mobile-day-header';
+        		header.textContent = dateStr.charAt(0).toUpperCase()+dateStr.slice(1);
+        		wrap.appendChild(header);
+
+        		const slots = document.createElement('div');
+        		slots.className = 'mobile-day-slots';
+
+        		MOMENTS.forEach(moment=>{
+        			const slot = document.createElement('div');
+        			slot.className = 'mobile-slot';
+        			const meal = meals.find(m=>m.day===day && m.moment===moment && m.week_offset===weekOffset);
+
+        			if(meal){
+        				slot.classList.add('has-meal');
+        				slot.innerHTML = `
+        					<div class="slot-top">
+        						<span class="slot-moment">${moment}</span>
+        						<div class="slot-actions">
+        							<button class="slot-btn" onclick="editMeal('${meal.id}')" title="Modifier">✏️</button>
+        							<button class="slot-btn" onclick="deleteMealApi('${meal.id}')" title="Supprimer">🗑️</button>
+        						</div>
+        					</div>
+        					<div class="slot-meal-text">${meal.meal}</div>
+        				`;
+        			}else{
+        				slot.innerHTML = `
+        					<div class="slot-top">
+        						<span class="slot-moment">${moment}</span>
+        					</div>
+        					<button class="slot-add-btn" onclick="setMealDayAndMoment('${day}','${moment}',${weekOffset})" title="Ajouter">+</button>
+        				`;
+        			}
+        			slots.appendChild(slot);
+        		});
+
+        		wrap.appendChild(slots);
+        		mobile.appendChild(wrap);
+        	}
+        }
+
+        /* Rendu principal (desktop + bascule mobile) */
         async function renderMeals(){
         	const meals = await loadMeals();
         	const weekOffset = parseInt(document.getElementById('week-selector').value,10);
@@ -99,7 +159,7 @@
 
         	if(isMobileMeals()){
         		if(grid) grid.style.display='none';
-        		if(mobile) mobile.style.display='block';
+        		if(mobile) mobile.style.display='flex';
         		renderMealsMobile(meals, weekOffset);
         		updateWeekDisplay();
         		return;
@@ -107,6 +167,9 @@
         		if(grid) grid.style.display='';
         		if(mobile) mobile.style.display='none';
         	}
+
+        	if(!grid) return;
+        	grid.innerHTML = ''; // reset avant reconstruction desktop
 
         	// ENTETE
         	const headerRow = document.createElement('div');
@@ -132,9 +195,9 @@
         		else if (isFuture(dayIndex, weekOffset) || isNextMonday) dayHeader.classList.add('future');
         		headerRow.appendChild(dayHeader);
         	}
-        	container.appendChild(headerRow);
+        	grid.appendChild(headerRow);
 
-        	// LIGNES (midi / soir)
+        	// LIGNES
         	MOMENTS.forEach(moment=>{
         		const row=document.createElement('div');
         		row.className='meals-row';
@@ -145,13 +208,10 @@
         			const isNextMonday=i===7;
         			const cell=document.createElement('div');
         			cell.className='meal-cell';
-
-        			/* === AJOUT: label jour pour mobile === */
         			let mobileLabel = day.slice(0,3);
         			mobileLabel = mobileLabel.charAt(0).toUpperCase()+mobileLabel.slice(1);
         			if(isNextMonday) mobileLabel = 'Lun+1';
         			cell.setAttribute('data-day', mobileLabel);
-
         			const meal = meals.find(m=>m.day===day && m.moment===moment && m.week_offset === (isNextMonday? weekOffset+1 : weekOffset));
         			if(meal){
         				cell.innerHTML = `
@@ -170,12 +230,10 @@
         			else if(isPast(dayIndex, weekOffset) || (isNextMonday && weekOffset===0 && isPast(0,1))) cell.classList.add('past');
         			else if(isFuture(dayIndex, weekOffset) || isNextMonday) cell.classList.add('future');
         			if(isNextMonday) cell.classList.add('next-week');
-
         			row.appendChild(cell);
         		}
-        		container.appendChild(row);
+        		grid.appendChild(row);
         	});
-
         	updateWeekDisplay();
         }
 
