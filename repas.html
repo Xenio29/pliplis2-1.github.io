@@ -34,8 +34,25 @@
         	return rows;
         }
 
+        function getMealFormRefs(){
+        	return {
+        		day: document.getElementById('meal-day'),
+        		moment: document.getElementById('meal-moment'),
+        		text: document.getElementById('meal-text'),
+        		id: document.getElementById('meal-id'),
+        		modal: document.getElementById('meal-modal'),
+        		title: document.getElementById('meal-modal-title')
+        	};
+        }
+
+        function closeMealModal(){
+        	const { modal } = getMealFormRefs();
+        	if(modal) modal.style.display='none';
+        }
+
         async function addOrUpdateMeal(day, moment, meal, id=null){
-        	const weekOffset = parseInt(document.getElementById('week-selector').value);
+        	const sel = document.getElementById('week-selector');
+        	const weekOffset = parseInt(sel.value,10);
         	if(id){
         		await updateMeal(id, day, moment, meal, weekOffset);
         	}else{
@@ -46,114 +63,80 @@
         	closeMealModal();
         }
 
-        async function deleteMeal(id){
-        	await deleteMealApi(id);
-        	MEALS_CACHE.ts = 0;
-        	renderMeals();
-        }
-
         function openMealModal(day='lundi', moment='midi', weekOffset=null){
+        	const { day:dayEl, moment:momentEl, text, id, modal, title } = getMealFormRefs();
         	if(weekOffset!==null){
         		document.getElementById('week-selector').value = weekOffset;
         	}
-        	meal_day.value = day;
-        	meal_moment.value = moment;
-        	meal_text.value = '';
-        	meal_id.value = '';
-        	meal_modal_title.textContent = 'Ajouter un repas';
-        	meal_modal.style.display='block';
-        	setTimeout(()=>meal_text.focus(),10);
+        	dayEl.value = day;
+        	momentEl.value = moment;
+        	text.value = '';
+        	id.value = '';
+        	title.textContent = 'Ajouter un repas';
+        	modal.style.display='block';
+        	setTimeout(()=>text.focus(),20);
         }
 
-        function editMeal(id){
+        function editMeal(mealId){
         	loadMeals().then(meals=>{
-        		const m = meals.find(x=>x.id===id);
+        		const f = getMealFormRefs();
+        		const m = meals.find(x=>x.id===mealId);
         		if(!m) return;
-        		meal_day.value = m.day;
-        		meal_moment.value = m.moment;
-        		meal_text.value = m.meal;
-        		meal_id.value = m.id;
-        		meal_modal_title.textContent = 'Modifier le repas';
-        		meal_modal.style.display='block';
+        		f.day.value = m.day;
+        		f.moment.value = m.moment;
+        		f.text.value = m.meal;
+        		f.id.value = m.id;
+        		f.title.textContent = 'Modifier le repas';
+        		f.modal.style.display='block';
         	});
         }
 
         async function renderMeals(){
         	const meals = await loadMeals();
-        	const weekOffset = parseInt(document.getElementById('week-selector').value,10); /* FIX */
+        	const weekOffset = parseInt(document.getElementById('week-selector').value,10);
         	const container = document.getElementById('meals-grid');
         	if(!container) return;
         	container.innerHTML = '';
-        	
-        	// En-tête avec les jours (lundi à dimanche + lundi suivant)
+
+        	// ENTETE
         	const headerRow = document.createElement('div');
-        	headerRow.className = 'meals-header';
-        	headerRow.innerHTML = '<div class="time-header"></div>';
-        	
-        	// Afficher les 7 jours de la semaine + le lundi suivant
-        	for (let i = 0; i < 8; i++) {
+        	headerRow.className='meals-header';
+        	headerRow.innerHTML='<div class="time-header"></div>';
+        	for(let i=0;i<8;i++){
         		const dayIndex = i % 7;
         		const day = DAYS[dayIndex];
-        		const isNextMonday = i === 7;
-        		
-        		const dayHeader = document.createElement('div');
-        		dayHeader.className = 'day-header';
-        		
-        		let date, dateStr;
-        		if (isNextMonday) {
-        			// Lundi suivant
-        			date = getDateForDay(0, weekOffset + 1); // lundi de la semaine suivante
-        			dateStr = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-        			dayHeader.innerHTML = `
-        				<div>Lundi</div>
-        				<div class="date">${dateStr} (sem. suivante)</div>
-        			`;
+        		const isNextMonday = i===7;
+        		const dayHeader=document.createElement('div');
+        		dayHeader.className='day-header';
+        		let date;
+        		if(isNextMonday){
+        			date = getDateForDay(0, weekOffset+1);
+        			dayHeader.innerHTML = `<div>Lundi</div><div class="date">${date.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})} (sem. suivante)</div>`;
         			dayHeader.classList.add('next-week');
-        		} else {
-        			// Jours de la semaine actuelle
+        		}else{
         			date = getDateForDay(dayIndex, weekOffset);
-        			dateStr = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-        			dayHeader.innerHTML = `
-        				<div>${day.charAt(0).toUpperCase() + day.slice(1)}</div>
-        				<div class="date">${dateStr}</div>
-        			`;
+        			dayHeader.innerHTML = `<div>${day.charAt(0).toUpperCase()+day.slice(1)}</div><div class="date">${date.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}</div>`;
         		}
-        		
-        		if (isToday(dayIndex, weekOffset) && !isNextMonday) {
-        			dayHeader.classList.add('today');
-        		} else if (isPast(dayIndex, weekOffset) || (isNextMonday && weekOffset === 0 && isPast(0, 1))) {
-        			dayHeader.classList.add('past');
-        		} else if (isFuture(dayIndex, weekOffset) || isNextMonday) {
-        			dayHeader.classList.add('future');
-        		}
-        		
+        		if (isToday(dayIndex, weekOffset) && !isNextMonday) dayHeader.classList.add('today');
+        		else if (isPast(dayIndex, weekOffset) || (isNextMonday && weekOffset===0 && isPast(0,1))) dayHeader.classList.add('past');
+        		else if (isFuture(dayIndex, weekOffset) || isNextMonday) dayHeader.classList.add('future');
         		headerRow.appendChild(dayHeader);
         	}
-        	
         	container.appendChild(headerRow);
-        	
-        	// Lignes pour midi et soir
-        	MOMENTS.forEach(moment => {
-        		const row = document.createElement('div');
-        		row.className = 'meals-row';
-        		row.innerHTML = `<div class="moment-header">${moment.charAt(0).toUpperCase() + moment.slice(1)}</div>`;
-        		
-        		// 8 colonnes : lundi à dimanche + lundi suivant
-        		for (let i = 0; i < 8; i++) {
-        			const dayIndex = i % 7;
-        			const day = DAYS[dayIndex];
-        			const isNextMonday = i === 7;
-        			
-        			const cell = document.createElement('div');
-        			cell.className = 'meal-cell';
-        			
-        			const meal = meals.find(m => 
-        				m.day === day && 
-        				m.moment === moment && 
-        				m.week_offset === (isNextMonday ? weekOffset + 1 : weekOffset)
-        			);
-        			
-        			if (meal) {
+
+        	// LIGNES (midi / soir)
+        	MOMENTS.forEach(moment=>{
+        		const row=document.createElement('div');
+        		row.className='meals-row';
+        		row.innerHTML=`<div class="moment-header">${moment.charAt(0).toUpperCase()+moment.slice(1)}</div>`;
+        		for(let i=0;i<8;i++){
+        			const dayIndex=i%7;
+        			const day=DAYS[dayIndex];
+        			const isNextMonday=i===7;
+        			const cell=document.createElement('div');
+        			cell.className='meal-cell';
+        			const meal = meals.find(m=>m.day===day && m.moment===moment && m.week_offset === (isNextMonday? weekOffset+1 : weekOffset));
+        			if(meal){
         				cell.innerHTML = `
         					<div class="meal-content">
         						<span class="meal-text">${meal.meal}</span>
@@ -161,39 +144,25 @@
         							<button class="btn-small" onclick="editMeal('${meal.id}')">✏️</button>
         							<button class="btn-small" onclick="deleteMeal('${meal.id}')">🗑️</button>
         						</div>
-        					</div>
-        				`;
-        			} else {
-        				const targetWeekOffset = isNextMonday ? weekOffset + 1 : weekOffset;
-        				cell.innerHTML = `
-        					<button class="btn-add-meal" onclick="setMealDayAndMoment('${day}', '${moment}', ${targetWeekOffset})">+</button>
-        				`;
+        					</div>`;
+        			}else{
+        				const targetWeekOffset = isNextMonday? weekOffset+1 : weekOffset;
+        				cell.innerHTML = `<button class="btn-add-meal" onclick="setMealDayAndMoment('${day}','${moment}',${targetWeekOffset})">+</button>`;
         			}
-        			
-        			if (isToday(dayIndex, weekOffset) && !isNextMonday) {
-        				cell.classList.add('today');
-        			} else if (isPast(dayIndex, weekOffset) || (isNextMonday && weekOffset === 0 && isPast(0, 1))) {
-        				cell.classList.add('past');
-        			} else if (isFuture(dayIndex, weekOffset) || isNextMonday) {
-        				cell.classList.add('future');
-        			}
-        			
-        			if (isNextMonday) {
-        				cell.classList.add('next-week');
-        			}
-        			
+        			if(isToday(dayIndex, weekOffset) && !isNextMonday) cell.classList.add('today');
+        			else if(isPast(dayIndex, weekOffset) || (isNextMonday && weekOffset===0 && isPast(0,1))) cell.classList.add('past');
+        			else if(isFuture(dayIndex, weekOffset) || isNextMonday) cell.classList.add('future');
+        			if(isNextMonday) cell.classList.add('next-week');
         			row.appendChild(cell);
         		}
-        		
         		container.appendChild(row);
         	});
-        	
-        	// Mise à jour de l'affichage de la semaine
+
         	updateWeekDisplay();
         }
 
-        function setMealDayAndMoment(day, moment, weekOffset = null) {
-            openMealModal(day, moment, weekOffset);
+        function setMealDayAndMoment(day,moment,weekOffset=null){
+        	openMealModal(day,moment,weekOffset);
         }
 
         function updateWeekDisplay() {
@@ -248,40 +217,22 @@ function changeWeek(delta){
 	sel.value = v;
 	renderMeals();
 }
-function closeMealModal(){
-	const mm = document.getElementById('meal-modal');
-	if(mm) mm.style.display='none';
-}
-
-/* Récup raccourcis éléments modal (sécurité si déjà utilisés) */
-const meal_modal = document.getElementById('meal-modal');
-const meal_day = document.getElementById('meal-day');
-const meal_moment = document.getElementById('meal-moment');
-const meal_text = document.getElementById('meal-text');
-const meal_id = document.getElementById('meal-id');
-const meal_modal_title = document.getElementById('meal-modal-title');
-
         // Initialisation
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('meal-form').addEventListener('submit', async (e)=>{
             	e.preventDefault();
-            	const day = meal_day.value;
-            	const moment = meal_moment.value;
-            	const meal = meal_text.value.trim();
-            	const id = meal_id.value ? meal_id.value : null; // pas de parseInt (UUID)
-            	if(meal) await addOrUpdateMeal(day,moment,meal,id);
+            	const { day, moment, text, id } = getMealFormRefs();
+            	const mealText = text.value.trim();
+            	if(!mealText) return;
+            	await addOrUpdateMeal(day.value, moment.value, mealText, id.value || null);
             });
             document.getElementById('week-selector').addEventListener('change', renderMeals);
             document.getElementById('add-meal-btn').addEventListener('click', () => {
-                const currentWeek = parseInt(document.getElementById('week-selector').value);
+                const currentWeek = parseInt(document.getElementById('week-selector').value,10);
                 openMealModal('lundi','midi', currentWeek);
             });
-            
-            // Fermer la modal en cliquant à l'extérieur
-            document.getElementById('meal-modal').addEventListener('click', function(e) {
-                if (e.target.id === 'meal-modal') {
-                    closeMealModal();
-                }
+            document.getElementById('meal-modal').addEventListener('click', e=>{
+            	if(e.target.id==='meal-modal') closeMealModal();
             });
             
             renderMeals();

@@ -673,17 +673,22 @@ clearBought = async function(){
 };
 addCourseFromForm = async function(e){
 	e.preventDefault();
-	const title = c_title.value.trim();
+	const titleEl = document.getElementById('c-title');
+	const qtyEl   = document.getElementById('c-qty');
+	const catEl   = document.getElementById('c-category');
+	const noteEl  = document.getElementById('c-note');
+	const title = titleEl.value.trim();
 	if(!title) return;
+
 	await createCourse({
 		title,
-		quantity:c_qty.value.trim(),
-		category:c_category.value,
-		note:c_note.value.trim(),
+		quantity: qtyEl.value.trim(),
+		category: catEl.value || 'Autres',
+		note: noteEl.value.trim(),
 		bought:false
 	});
 	e.target.reset();
-	if(typeof renderCourses==='function') renderCourses(true);
+	if(typeof renderCourses==='function') await renderCourses(true);
 	if(typeof renderHome==='function') renderHome();
 };
 
