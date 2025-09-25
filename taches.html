@@ -16,7 +16,7 @@
             
             const groups = {};
             data.tasks.forEach(t => {
-                const task = ensureTaskFrequency(t);
+                const task = ensureTaskPeriodicity(t); // renommé
                 (groups[task.room] = groups[task.room] || []).push(task);
             });
             

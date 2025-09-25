@@ -3,240 +3,239 @@ const TASKS_KEY = 'home_tasks_v1';
 const COURSES_KEY = 'home_courses_v1';
 const THEME_KEY = 'home_theme_v1';
 
-// Données par défaut
-const DEFAULT_TASKS = [
-    { id: 1, title: "Sortir les poubelles", frequency: {value: 1, unit: 'days'}, room: 'Extérieur', lastDone: Date.now() - 2*24*3600*1000, finished: false },
-    { id: 2, title: "Passer l'aspirateur", frequency: {value: 7, unit: 'days'}, room: 'Salon', lastDone: Date.now() - 5*24*3600*1000, finished: false }
-];
-
-const DEFAULT_COURSES = [
-    { id: 1, title: "Lait", quantity: "1L", category: "Boissons", note: "", bought: false },
-    { id: 2, title: "Pain", quantity: "1", category: "Boulangerie", note: "", bought: false }
-];
+// Données par défaut désormais vides (plus de données seed locales)
+const DEFAULT_TASKS = [];
+const DEFAULT_COURSES = [];
 
 const CATEGORIES = ['Fruits', 'Légumes', 'Boulangerie', 'Épicerie', 'Boissons', 'Boucherie', 'Autres'];
 
 // Gestion des données
 function loadData() {
-    const t = localStorage.getItem(TASKS_KEY);
-    const c = localStorage.getItem(COURSES_KEY);
-    let tasks = t ? JSON.parse(t) : DEFAULT_TASKS;
-    let courses = c ? JSON.parse(c) : DEFAULT_COURSES;
-    return { tasks, courses };
+	const t = localStorage.getItem(TASKS_KEY);
+	const c = localStorage.getItem(COURSES_KEY);
+	let tasks = t ? JSON.parse(t) : DEFAULT_TASKS;
+	let courses = c ? JSON.parse(c) : DEFAULT_COURSES;
+	tasks.forEach(ensureTaskPeriodicity);
+	return { tasks, courses };
 }
 
 function saveData(tasks, courses) {
-    localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
-    localStorage.setItem(COURSES_KEY, JSON.stringify(courses));
+	localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+	localStorage.setItem(COURSES_KEY, JSON.stringify(courses));
 }
 
 // Utilities
 function nextId(list) {
-    return list.length ? Math.max(...list.map(i => i.id)) + 1 : 1;
+	return list.length ? Math.max(...list.map(i => i.id)) + 1 : 1;
 }
 
 function msFromUnit(value, unit) {
-    const v = Number(value) || 1;
-    if (unit === 'hours') return v * 3600 * 1000;
-    if (unit === 'days') return v * 24 * 3600 * 1000;
-    return v * 24 * 3600 * 1000;
+	const v = Number(value) || 1;
+	if (unit === 'hours') return v * 3600 * 1000;
+	if (unit === 'days') return v * 24 * 3600 * 1000;
+	return v * 24 * 3600 * 1000;
 }
 
 function progressPercent(task) {
-    const total = msFromUnit(task.frequency.value, task.frequency.unit) || 1;
-    const elapsed = Date.now() - (task.lastDone || 0);
-    const remaining = total - elapsed;
-    const remainingDays = Math.ceil(remaining / (24 * 3600 * 1000));
-    const progress = Math.min(100, Math.floor((elapsed / total) * 100));
-    return { progress, remainingDays };
+	task = ensureTaskPeriodicity(task);
+	const total = msFromUnit(task.periodicity.value, task.periodicity.unit) || 1;
+	const elapsed = Date.now() - (task.lastDone || 0);
+	const remaining = total - elapsed;
+	const remainingDays = Math.ceil(remaining / (24 * 3600 * 1000));
+	const progress = Math.min(100, Math.floor((elapsed / total) * 100));
+	return { progress, remainingDays };
 }
 
-function ensureTaskFrequency(task) {
-    if (!task.frequency) {
-        task.frequency = { value: 7, unit: 'days' };
-    }
-    if (!task.lastDone) {
-        task.lastDone = Date.now() - 2*24*3600*1000;
-    }
-    return task;
+function ensureTaskPeriodicity(task) {
+	if (!task.periodicity) {
+		// migration locale ancienne structure (frequency) si existante
+		if (task.frequency) {
+			task.periodicity = { value: task.frequency.value, unit: task.frequency.unit };
+			delete task.frequency;
+		} else {
+			task.periodicity = { value: 7, unit: 'days' };
+		}
+	}
+	if (!task.lastDone) task.lastDone = Date.now() - 2*24*3600*1000;
+	return task;
 }
 
 // Fonctions pour les tâches
 function markTaskToggle(id) {
-    const data = loadData();
-    const task = data.tasks.find(t => t.id === id);
-    if (task) {
-        if (!task.finished) {
-            task._prevLastDone = task.lastDone || 0;
-            task.finished = true;
-            task.lastDone = Date.now();
-        } else {
-            if (typeof task._prevLastDone !== 'undefined') {
-                task.lastDone = task._prevLastDone;
-                delete task._prevLastDone;
-            }
-            task.finished = false;
-        }
-        saveData(data.tasks, data.courses);
-        if (typeof renderTasks === 'function') renderTasks();
-        if (typeof renderHome === 'function') renderHome();
-    }
+	const data = loadData();
+	const task = data.tasks.find(t => t.id === id);
+	if (task) {
+		if (!task.finished) {
+			task._prevLastDone = task.lastDone || 0;
+			task.finished = true;
+			task.lastDone = Date.now();
+		} else {
+			if (typeof task._prevLastDone !== 'undefined') {
+				task.lastDone = task._prevLastDone;
+				delete task._prevLastDone;
+			}
+			task.finished = false;
+		}
+		saveData(data.tasks, data.courses);
+		if (typeof renderTasks === 'function') renderTasks();
+		if (typeof renderHome === 'function') renderHome();
+	}
 }
 
 function deleteTask(id) {
-    const data = loadData();
-    data.tasks = data.tasks.filter(t => t.id !== id);
-    saveData(data.tasks, data.courses);
-    if (typeof renderTasks === 'function') renderTasks();
-    if (typeof renderHome === 'function') renderHome();
+	const data = loadData();
+	data.tasks = data.tasks.filter(t => t.id !== id);
+	saveData(data.tasks, data.courses);
+	if (typeof renderTasks === 'function') renderTasks();
+	if (typeof renderHome === 'function') renderHome();
 }
 
 function resetTaskTimer(id) {
-    const data = loadData();
-    const task = data.tasks.find(t => t.id === id);
-    if (task) {
-        task.lastDone = Date.now();
-        task.finished = false;
-        if (typeof task._prevLastDone !== 'undefined') delete task._prevLastDone;
-        saveData(data.tasks, data.courses);
-        if (typeof renderTasks === 'function') renderTasks();
-        if (typeof renderHome === 'function') renderHome();
-    }
+	const data = loadData();
+	const task = data.tasks.find(t => t.id === id);
+	if (task) {
+		task.lastDone = Date.now();
+		task.finished = false;
+		if (typeof task._prevLastDone !== 'undefined') delete task._prevLastDone;
+		saveData(data.tasks, data.courses);
+		if (typeof renderTasks === 'function') renderTasks();
+		if (typeof renderHome === 'function') renderHome();
+	}
 }
 
 function addTaskFromForm(e) {
-    e.preventDefault();
-    const title = document.getElementById('t-title').value.trim();
-    const periodValue = parseInt(document.getElementById('t-period').value);
-    const room = document.getElementById('t-room').value;
-    const data = loadData();
-    const id = nextId(data.tasks);
-    data.tasks.push({
-        id,
-        title,
-        frequency: {value: periodValue, unit: 'days'},
-        room,
-        lastDone: Date.now() - 1*24*3600*1000,
-        finished: false
-    });
-    saveData(data.tasks, data.courses);
-    if (typeof renderTasks === 'function') renderTasks();
-    document.getElementById('task-form').reset();
+	e.preventDefault();
+	const title = document.getElementById('t-title').value.trim();
+	const periodValue = parseInt(document.getElementById('t-period').value);
+	const room = document.getElementById('t-room').value;
+	const data = loadData();
+	const id = nextId(data.tasks);
+	data.tasks.push({
+		id,
+		title,
+		periodicity: { value: periodValue, unit: 'days' },
+		room,
+		lastDone: Date.now() - 1*24*3600*1000,
+		finished: false
+	});
+	saveData(data.tasks, data.courses);
+	if (typeof renderTasks === 'function') renderTasks();
+	document.getElementById('task-form').reset();
 }
 
 // Fonctions pour les courses
 function toggleBought(id) {
-    const data = loadData();
-    const item = data.courses.find(c => c.id === id);
-    if (item) {
-        item.bought = !item.bought;
-        saveData(data.tasks, data.courses);
-        if (typeof renderCourses === 'function') renderCourses();
-        if (typeof renderHome === 'function') renderHome();
-    }
+	const data = loadData();
+	const item = data.courses.find(c => c.id === id);
+	if (item) {
+		item.bought = !item.bought;
+		saveData(data.tasks, data.courses);
+		if (typeof renderCourses === 'function') renderCourses();
+		if (typeof renderHome === 'function') renderHome();
+	}
 }
 
 function deleteCourse(id) {
-    const data = loadData();
-    data.courses = data.courses.filter(c => c.id !== id);
-    saveData(data.tasks, data.courses);
-    if (typeof renderCourses === 'function') renderCourses();
-    if (typeof renderHome === 'function') renderHome();
+	const data = loadData();
+	data.courses = data.courses.filter(c => c.id !== id);
+	saveData(data.tasks, data.courses);
+	if (typeof renderCourses === 'function') renderCourses();
+	if (typeof renderHome === 'function') renderHome();
 }
 
 function clearBought() {
-    const data = loadData();
-    data.courses = data.courses.filter(c => !c.bought);
-    saveData(data.tasks, data.courses);
-    if (typeof renderCourses === 'function') renderCourses();
-    if (typeof renderHome === 'function') renderHome();
+	const data = loadData();
+	data.courses = data.courses.filter(c => !c.bought);
+	saveData(data.tasks, data.courses);
+	if (typeof renderCourses === 'function') renderCourses();
+	if (typeof renderHome === 'function') renderHome();
 }
 
 function addCourseFromForm(e) {
-    e.preventDefault();
-    const title = document.getElementById('c-title').value.trim();
-    const quantity = document.getElementById('c-qty').value.trim();
-    const category = document.getElementById('c-category').value;
-    const note = document.getElementById('c-note').value.trim();
-    if (!title) return;
-    const data = loadData();
-    const id = nextId(data.courses);
-    data.courses.push({ id, title, quantity, category, note, bought: false });
-    saveData(data.tasks, data.courses);
-    if (typeof renderCourses === 'function') renderCourses();
-    document.getElementById('course-form').reset();
+	e.preventDefault();
+	const title = document.getElementById('c-title').value.trim();
+	const quantity = document.getElementById('c-qty').value.trim();
+	const category = document.getElementById('c-category').value;
+	const note = document.getElementById('c-note').value.trim();
+	if (!title) return;
+	const data = loadData();
+	const id = nextId(data.courses);
+	data.courses.push({ id, title, quantity, category, note, bought: false });
+	saveData(data.tasks, data.courses);
+	if (typeof renderCourses === 'function') renderCourses();
+	document.getElementById('course-form').reset();
 }
 
 // Gestion du thème
 function applyTheme(mode) {
-    if (mode === 'system') {
-        document.documentElement.removeAttribute('data-theme');
-    } else {
-        document.documentElement.setAttribute('data-theme', mode);
-    }
-    localStorage.setItem(THEME_KEY, mode);
+	if (mode === 'system') {
+		document.documentElement.removeAttribute('data-theme');
+	} else {
+		document.documentElement.setAttribute('data-theme', mode);
+	}
+	localStorage.setItem(THEME_KEY, mode);
 }
 
 function initTheme() {
-    const sel = document.getElementById('theme-select');
-    if (!sel) return;
-    
-    const saved = localStorage.getItem(THEME_KEY) || 'system';
-    sel.value = saved;
-    applyTheme(saved);
-    
-    sel.addEventListener('change', e => applyTheme(e.target.value));
-    
-    // Répondre aux changements du système en mode 'system'
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    mq.addEventListener && mq.addEventListener('change', () => {
-        if ((localStorage.getItem(THEME_KEY) || 'system') === 'system') {
-            document.documentElement.removeAttribute('data-theme');
-        }
-    });
+	const sel = document.getElementById('theme-select');
+	if (!sel) return;
+	
+	const saved = localStorage.getItem(THEME_KEY) || 'system';
+	sel.value = saved;
+	applyTheme(saved);
+	
+	sel.addEventListener('change', e => applyTheme(e.target.value));
+	
+	// Répondre aux changements du système en mode 'system'
+	const mq = window.matchMedia('(prefers-color-scheme: dark)');
+	mq.addEventListener && mq.addEventListener('change', () => {
+		if ((localStorage.getItem(THEME_KEY) || 'system') === 'system') {
+			document.documentElement.removeAttribute('data-theme');
+		}
+	});
 }
 
 // Initialisation des catégories pour le formulaire des courses
 function initCategories() {
-    const sel = document.getElementById('c-category');
-    if (!sel) return;
-    
-    sel.innerHTML = '';
-    CATEGORIES.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c;
-        opt.textContent = c;
-        sel.appendChild(opt);
-    });
+	const sel = document.getElementById('c-category');
+	if (!sel) return;
+	
+	sel.innerHTML = '';
+	CATEGORIES.forEach(c => {
+		const opt = document.createElement('option');
+		opt.value = c;
+		opt.textContent = c;
+		sel.appendChild(opt);
+	});
 }
 
 // Initialisation générale
 function initApp() {
-    initTheme();
-    initCategories();
+	initTheme();
+	initCategories();
 }
 
 // Fonction pour le nettoyage automatique des repas (exécutée au chargement)
 function cleanupOldMeals() {
-    const MEALS_KEY = 'home_meals_v1';
-    const meals = JSON.parse(localStorage.getItem(MEALS_KEY) || '[]');
-    
-    const getWeekOffset = (date) => {
-        const startOfYear = new Date(date.getFullYear(), 0, 1);
-        const days = Math.floor((date - startOfYear) / (24 * 60 * 60 * 1000));
-        return Math.floor(days / 7);
-    };
-    
-    const currentWeek = getWeekOffset(new Date());
-    const updatedMeals = meals.filter(meal => {
-        const mealWeek = currentWeek + (meal.weekOffset || 0);
-        // Garder les repas de la semaine actuelle et la suivante
-        return mealWeek >= currentWeek && mealWeek <= currentWeek + 1;
-    });
-    
-    if (updatedMeals.length !== meals.length) {
-        localStorage.setItem(MEALS_KEY, JSON.stringify(updatedMeals));
-    }
+	const MEALS_KEY = 'home_meals_v1';
+	const meals = JSON.parse(localStorage.getItem(MEALS_KEY) || '[]');
+	
+	const getWeekOffset = (date) => {
+		const startOfYear = new Date(date.getFullYear(), 0, 1);
+		const days = Math.floor((date - startOfYear) / (24 * 60 * 60 * 1000));
+		return Math.floor(days / 7);
+	};
+	
+	const currentWeek = getWeekOffset(new Date());
+	const updatedMeals = meals.filter(meal => {
+		const mealWeek = currentWeek + (meal.weekOffset || 0);
+		// Garder les repas de la semaine actuelle et la suivante
+		return mealWeek >= currentWeek && mealWeek <= currentWeek + 1;
+	});
+	
+	if (updatedMeals.length !== meals.length) {
+		localStorage.setItem(MEALS_KEY, JSON.stringify(updatedMeals));
+	}
 }
 
 // Exécuter le nettoyage au chargement de l'app
@@ -512,11 +511,14 @@ async function fetchTasks(){
 		.from('tasks')
 		.select('*')
 		.order('created_at',{ ascending:false });
-	if(error){ console.warn('tasks fallback local', error); const d = loadData(); return d.tasks; }
+	if(error){
+		console.warn('tasks fallback local', error);
+		const d = loadData(); return d.tasks;
+	}
 	return data.map(r=>({
-		id: r.id,                       // UUID
+		id: r.id,
 		title: r.title,
-		frequency: { value: r.freq_value, unit: r.freq_unit },
+		periodicity: { value: r.period_value, unit: r.period_unit }, // <== nouveau
 		room: r.room,
 		lastDone: r.last_done ? Date.parse(r.last_done) : Date.now(),
 		finished: !!r.finished
@@ -559,10 +561,11 @@ async function loadDataAsync(){
 /* ===== CRUD TASKS (Supabase) ===== */
 async function createTask(task){
 	if(!supabaseClient) return;
+	task = ensureTaskPeriodicity(task);
 	await supabaseClient.from('tasks').insert([{
 		title: task.title,
-		freq_value: task.frequency.value,
-		freq_unit: task.frequency.unit,
+		period_value: task.periodicity.value,
+		period_unit: task.periodicity.unit,
 		room: task.room,
 		last_done: new Date(task.lastDone).toISOString(),
 		finished: task.finished
@@ -570,10 +573,11 @@ async function createTask(task){
 }
 async function updateTask(task){
 	if(!supabaseClient) return;
+	task = ensureTaskPeriodicity(task);
 	await supabaseClient.from('tasks').update({
 		title: task.title,
-		freq_value: task.frequency.value,
-		freq_unit: task.frequency.unit,
+		period_value: task.periodicity.value,
+		period_unit: task.periodicity.unit,
 		room: task.room,
 		last_done: new Date(task.lastDone).toISOString(),
 		finished: task.finished
@@ -593,7 +597,7 @@ addTaskFromForm = async function(e){
 	if(!title) return;
 	await createTask({
 		title,
-		frequency:{value:periodValue, unit:'days'},
+		periodicity:{ value: periodValue, unit:'days' },
 		room,
 		lastDone: Date.now(),
 		finished:false
@@ -607,13 +611,8 @@ markTaskToggle = async function(id){
 	const tasks = await fetchTasks();
 	const t = tasks.find(x=>x.id===id);
 	if(!t) return;
-	if(!t.finished){
-		t.finished = true;
-		t.lastDone = Date.now();
-	}else{
-		t.finished = false;
-		t.lastDone = Date.now();
-	}
+	t.finished = !t.finished;
+	t.lastDone = Date.now();
 	await updateTask(t);
 	if(typeof renderTasks==='function') renderTasks(true);
 	if(typeof renderHome==='function') renderHome();
