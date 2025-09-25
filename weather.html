@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1.0">
+	<title>Météo - Gestion</title>
+	<link rel="stylesheet" href="styles.css">
+	<script src="app.js"></script>
+</head>
+<body>
+	<div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar(false)"></div>
+	<button class="sidebar-toggle" aria-label="Ouvrir le menu" onclick="toggleSidebar(true)">☰ Menu</button>
+	<div class="app">
+		<aside class="sidebar card" aria-label="Navigation">
+			<button class="sidebar-close" aria-label="Fermer le menu" onclick="toggleSidebar(false)">✕</button>
+			<div class="brand">Maison • Gestion</div>
+			<nav>
+				<a href="index.html">Accueil</a>
+				<a href="taches.html">Tâches</a>
+				<a href="courses.html">Courses</a>
+				<a href="repas.html">Repas</a>
+				<a href="weather.html">Météo</a>
+			</nav>
+			<div class="separator" aria-hidden="true"></div>
+			<div class="sidebar-footer">
+				<div class="small">Thème</div>
+				<div class="theme-select-wrapper">
+					<select id="theme-select" class="theme-select">
+						<option value="system">Système</option>
+						<option value="light">Clair</option>
+						<option value="dark">Sombre</option>
+					</select>
+				</div>
+			</div>
+		</aside>
+
+		<main class="main">
+			<h1>Météo</h1>
+			<div class="dashboard-grid">
+				<section class="card card--wide">
+					<h2>Conditions actuelles</h2>
+					<div id="weather-full"></div>
+				</section>
+				<section class="card">
+					<h2>Actualiser</h2>
+					<p style="font-size:.85rem; opacity:.8;">La météo est mise en cache 15 minutes. Vous pouvez forcer une actualisation.</p>
+					<button class="btn" onclick="forceRefreshWeather('weather-full')"><span>↻ Forcer</span></button>
+				</section>
+			</div>
+		</main>
+	</div>
+
+	<script>
+		// thème
+		(function(){
+			const KEY='home_theme_v1';
+			function apply(m){ if(m==='system')document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme',m); localStorage.setItem(KEY,m); }
+			document.addEventListener('DOMContentLoaded',()=>{
+				const sel=document.getElementById('theme-select');
+				if(!sel) return;
+				const saved=localStorage.getItem(KEY)||'system';
+				sel.value=saved; apply(saved);
+				sel.addEventListener('change',e=>apply(e.target.value));
+				renderWeather('weather-full');
+			});
+		})();
+	</script>
+</body>
+</html>

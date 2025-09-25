@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Courses - Liste</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js"></script>
+    <script>
+        // Rendu spécifique à la page des courses
+        async function renderCourses(force=false){
+            const data = await loadDataAsync();
+            const container = document.getElementById('courses-by-cat');
+            container.innerHTML='';
+            
+            const groups = {};
+            CATEGORIES.forEach(c=>groups[c]=[]);
+            data.courses.forEach(c=>(groups[c.category]=groups[c.category]||[]).push(c));
+            
+            Object.keys(groups).forEach(cat=>{
+                const items = groups[cat];
+                if(!items.length) return;
+                
+                const box=document.createElement('div');
+                box.innerHTML=`<h3>${cat}</h3>`;
+                const ul=document.createElement('ul');
+                
+                items.forEach(it=>{
+                    const li=document.createElement('li');
+                    li.innerHTML=`
+                        <label class="checkbox-container">
+                            <input type="checkbox" ${it.bought?'checked':''} onchange="toggleBought(${it.id})">
+                            <span class="checkbox-checkmark"></span>
+                            <strong>${it.title}</strong> ${it.quantity? '('+it.quantity+')':''} ${it.note? '- '+it.note:''}
+                        </label>
+                        <button class="btn" onclick="deleteCourse(${it.id})"><span>Supprimer</span></button>`;
+                    ul.appendChild(li);
+                });
+                
+                box.appendChild(ul);
+                container.appendChild(box);
+            });
+        }
+
+        // Initialisation spécifique à la page des courses
+        window.onload = function() {
+            const sel = document.getElementById('c-category');
+            CATEGORIES.forEach(c=>{
+                const opt=document.createElement('option');
+                opt.value=c; opt.textContent=c; sel.appendChild(opt);
+            });
+            course_form.addEventListener('submit', addCourseFromForm);
+            clear_bought.addEventListener('click', clearBought);
+            renderCourses();
+        };
+    </script>
+    <script>
+        // gestion du thème (commune à toutes les pages)
+        (function(){
+            const KEY = 'home_theme_v1';
+            function applyTheme(mode){
+                if(mode === 'system'){
+                    document.documentElement.removeAttribute('data-theme');
+                } else {
+                    document.documentElement.setAttribute('data-theme', mode);
+                }
+                localStorage.setItem(KEY, mode);
+            }
+            function init(){
+                const select = document.getElementById('theme-select');
+                if(!select) return;
+                const saved = localStorage.getItem(KEY) || 'system';
+                select.value = saved;
+                applyTheme(saved);
+                select.addEventListener('change', e => applyTheme(e.target.value));
+            }
+            document.addEventListener('DOMContentLoaded', init);
+            const media = window.matchMedia('(prefers-color-scheme: dark)');
+            if(media.addEventListener){
+                media.addEventListener('change', () => {
+                    if((localStorage.getItem(KEY) || 'system') === 'system'){
+                        applyTheme('system');
+                    }
+                });
+            }
+        })();
+    </script>
+</head>
+<body>
+	<div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar(false)"></div>
+	<button class="sidebar-toggle" aria-label="Ouvrir le menu" onclick="toggleSidebar(true)">☰ Menu</button>
+    <div class="app">
+        <aside class="sidebar card" aria-label="Navigation">
+			<button class="sidebar-close" aria-label="Fermer le menu" onclick="toggleSidebar(false)">✕</button>
+            <div class="brand">Maison • Gestion</div>
+            <nav>
+                <a href="index.html">Accueil</a>
+                <a href="taches.html">Tâches</a>
+                <a href="courses.html">Courses</a>
+                <a href="repas.html">Repas</a>
+                <a href="weather.html">Météo</a>
+            </nav>
+            <div class="separator" aria-hidden="true"></div>
+            <div class="sidebar-footer">
+                <div class="small">Thème</div>
+                <div class="theme-select-wrapper">
+                    <select id="theme-select" class="theme-select">
+                        <option value="system">Système</option>
+                        <option value="light">Clair</option>
+                        <option value="dark">Sombre</option>
+                    </select>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main">
+            <h1>Liste de courses</h1>
+            <section class="card">
+                <h2>Ajouter un article</h2>
+                <form id="course-form">
+                    <div class="form-row">
+                        <div class="input-container">
+                            <input id="c-title" type="text" placeholder=" " required>
+                            <label for="c-title">Nom de l'article</label>
+                        </div>
+                        
+                        <div class="input-container">
+                            <input id="c-qty" type="text" placeholder=" ">
+                            <label for="c-qty">Quantité (ex: 5L, 300g, 2)</label>
+                        </div>
+                        
+                        <div class="select-container">
+                            <select id="c-category"></select>
+                        </div>
+                    </div>
+                    
+                    <div class="input-container" style="width: 100%;">
+                        <input id="c-note" type="text" placeholder=" ">
+                        <label for="c-note">Note supplémentaire (optionnel)</label>
+                    </div>
+                    
+                    <button type="submit" class="btn"><span>Ajouter l'article</span></button>
+                </form>
+            </section>
+
+            <section class="card">
+                <h2>Articles par catégorie</h2>
+                <div id="courses-by-cat"></div>
+                <button id="clear-bought" class="btn btn-secondary"><span>Supprimer les articles achetés</span></button>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

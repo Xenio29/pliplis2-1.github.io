@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planification des repas - Gestion</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js"></script>
+    <script>
+        const MEALS_KEY = 'home_meals_v1';
+
+        // Données par défaut
+        const DEFAULT_MEALS = [
+            { id: 1, day: 'lundi', moment: 'midi', meal: 'Pâtes carbonara', weekOffset: 0 },
+            { id: 2, day: 'lundi', moment: 'soir', meal: 'Poulet rôti et légumes', weekOffset: 0 },
+            { id: 3, day: 'mardi', moment: 'midi', meal: 'Salade César', weekOffset: 0 },
+            { id: 4, day: 'mardi', moment: 'soir', meal: 'Poisson au four', weekOffset: 0 }
+        ];
+
+        // Jours de la semaine (du lundi au dimanche)
+        const DAYS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+        const MOMENTS = ['midi', 'soir'];
+
+        const MEALS_CACHE_REFRESH_MS = 30_000;
+        let MEALS_CACHE = { ts:0, data:[] };
+
+        // Gestion des données des repas
+        async function loadMeals(){
+        	const now = Date.now();
+        	if(now - MEALS_CACHE.ts < MEALS_CACHE_REFRESH_MS) return MEALS_CACHE.data;
+        	const rows = await fetchMeals();
+        	MEALS_CACHE = { ts:now, data:rows };
+        	return rows;
+        }
+
+        async function addOrUpdateMeal(day, moment, meal, id=null){
+        	const weekOffset = parseInt(document.getElementById('week-selector').value);
+        	if(id){
+        		await updateMeal(id, day, moment, meal, weekOffset);
+        	}else{
+        		await createMeal(day, moment, meal, weekOffset);
+        	}
+        	MEALS_CACHE.ts = 0;
+        	renderMeals();
+        	closeMealModal();
+        }
+
+        async function deleteMeal(id){
+        	await deleteMealApi(id);
+        	MEALS_CACHE.ts = 0;
+        	renderMeals();
+        }
+
+        function openMealModal(day='lundi', moment='midi', weekOffset=null){
+        	if(weekOffset!==null){
+        		document.getElementById('week-selector').value = weekOffset;
+        	}
+        	meal_day.value = day;
+        	meal_moment.value = moment;
+        	meal_text.value = '';
+        	meal_id.value = '';
+        	meal_modal_title.textContent = 'Ajouter un repas';
+        	meal_modal.style.display='block';
+        	setTimeout(()=>meal_text.focus(),10);
+        }
+
+        function editMeal(id){
+        	loadMeals().then(meals=>{
+        		const m = meals.find(x=>x.id==id);
+        		if(!m) return;
+        		meal_day.value = m.day;
+        		meal_moment.value = m.moment;
+        		meal_text.value = m.meal;
+        		meal_id.value = m.id;
+        		meal_modal_title.textContent = 'Modifier le repas';
+        		meal_modal.style.display='block';
+        	});
+        }
+
+        async function renderMeals(){
+        	const meals = await loadMeals();
+        	const weekOffset = parseInt(week_selector.value);
+        	const container = document.getElementById('meals-grid');
+        	container.innerHTML = '';
+        	
+        	// En-tête avec les jours (lundi à dimanche + lundi suivant)
+        	const headerRow = document.createElement('div');
+        	headerRow.className = 'meals-header';
+        	headerRow.innerHTML = '<div class="time-header"></div>';
+        	
+        	// Afficher les 7 jours de la semaine + le lundi suivant
+        	for (let i = 0; i < 8; i++) {
+        		const dayIndex = i % 7;
+        		const day = DAYS[dayIndex];
+        		const isNextMonday = i === 7;
+        		
+        		const dayHeader = document.createElement('div');
+        		dayHeader.className = 'day-header';
+        		
+        		let date, dateStr;
+        		if (isNextMonday) {
+        			// Lundi suivant
+        			date = getDateForDay(0, weekOffset + 1); // lundi de la semaine suivante
+        			dateStr = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+        			dayHeader.innerHTML = `
+        				<div>Lundi</div>
+        				<div class="date">${dateStr} (sem. suivante)</div>
+        			`;
+        			dayHeader.classList.add('next-week');
+        		} else {
+        			// Jours de la semaine actuelle
+        			date = getDateForDay(dayIndex, weekOffset);
+        			dateStr = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+        			dayHeader.innerHTML = `
+        				<div>${day.charAt(0).toUpperCase() + day.slice(1)}</div>
+        				<div class="date">${dateStr}</div>
+        			`;
+        		}
+        		
+        		if (isToday(dayIndex, weekOffset) && !isNextMonday) {
+        			dayHeader.classList.add('today');
+        		} else if (isPast(dayIndex, weekOffset) || (isNextMonday && weekOffset === 0 && isPast(0, 1))) {
+        			dayHeader.classList.add('past');
+        		} else if (isFuture(dayIndex, weekOffset) || isNextMonday) {
+        			dayHeader.classList.add('future');
+        		}
+        		
+        		headerRow.appendChild(dayHeader);
+        	}
+        	
+        	container.appendChild(headerRow);
+        	
+        	// Lignes pour midi et soir
+        	MOMENTS.forEach(moment => {
+        		const row = document.createElement('div');
+        		row.className = 'meals-row';
+        		row.innerHTML = `<div class="moment-header">${moment.charAt(0).toUpperCase() + moment.slice(1)}</div>`;
+        		
+        		// 8 colonnes : lundi à dimanche + lundi suivant
+        		for (let i = 0; i < 8; i++) {
+        			const dayIndex = i % 7;
+        			const day = DAYS[dayIndex];
+        			const isNextMonday = i === 7;
+        			
+        			const cell = document.createElement('div');
+        			cell.className = 'meal-cell';
+        			
+        			const meal = meals.find(m => 
+        				m.day === day && 
+        				m.moment === moment && 
+        				m.week_offset === (isNextMonday ? weekOffset + 1 : weekOffset)
+        			);
+        			
+        			if (meal) {
+        				cell.innerHTML = `
+        					<div class="meal-content">
+        						<span class="meal-text">${meal.meal}</span>
+        						<div class="meal-actions">
+        							<button class="btn-small" onclick="editMeal(${meal.id})">✏️</button>
+        							<button class="btn-small" onclick="deleteMeal(${meal.id})">🗑️</button>
+        						</div>
+        					</div>
+        				`;
+        			} else {
+        				const targetWeekOffset = isNextMonday ? weekOffset + 1 : weekOffset;
+        				cell.innerHTML = `
+        					<button class="btn-add-meal" onclick="setMealDayAndMoment('${day}', '${moment}', ${targetWeekOffset})">+</button>
+        				`;
+        			}
+        			
+        			if (isToday(dayIndex, weekOffset) && !isNextMonday) {
+        				cell.classList.add('today');
+        			} else if (isPast(dayIndex, weekOffset) || (isNextMonday && weekOffset === 0 && isPast(0, 1))) {
+        				cell.classList.add('past');
+        			} else if (isFuture(dayIndex, weekOffset) || isNextMonday) {
+        				cell.classList.add('future');
+        			}
+        			
+        			if (isNextMonday) {
+        				cell.classList.add('next-week');
+        			}
+        			
+        			row.appendChild(cell);
+        		}
+        		
+        		container.appendChild(row);
+        	});
+        	
+        	// Mise à jour de l'affichage de la semaine
+        	updateWeekDisplay();
+        }
+
+        function setMealDayAndMoment(day, moment, weekOffset = null) {
+            openMealModal(day, moment, weekOffset);
+        }
+
+        function updateWeekDisplay() {
+            const weekOffset = parseInt(document.getElementById('week-selector').value);
+            const weekDisplay = document.getElementById('week-display');
+            
+            const startOfWeek = getDateForDay(0, weekOffset); // Lundi
+            const endOfWeek = getDateForDay(6, weekOffset); // Dimanche
+            const nextMonday = getDateForDay(0, weekOffset + 1); // Lundi suivant
+            
+            const startStr = startOfWeek.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+            const endStr = endOfWeek.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+            const nextMondayStr = nextMonday.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: weekOffset === 1 ? 'numeric' : undefined });
+            
+            if (weekOffset === 0) {
+                weekDisplay.textContent = `Semaine du ${startStr} au ${endStr} + lundi ${nextMondayStr}`;
+            } else {
+                weekDisplay.textContent = `Semaine du ${startStr} au ${endStr}`;
+            }
+            
+            // Masquer/afficher les boutons de navigation
+            document.getElementById('prev-week').style.display = weekOffset > 0 ? 'block' : 'none';
+            document.getElementById('next-week').style.display = weekOffset < 1 ? 'block' : 'none';
+        }
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('meal-form').addEventListener('submit', async (e)=>{
+            	e.preventDefault();
+            	const day = meal_day.value;
+            	const moment = meal_moment.value;
+            	const meal = meal_text.value.trim();
+            	const id = meal_id.value ? parseInt(meal_id.value) : null;
+            	if(meal) await addOrUpdateMeal(day,moment,meal,id);
+            });
+            document.getElementById('week-selector').addEventListener('change', renderMeals);
+            document.getElementById('add-meal-btn').addEventListener('click', () => {
+                const currentWeek = parseInt(document.getElementById('week-selector').value);
+                openMealModal('lundi','midi', currentWeek);
+            });
+            
+            // Fermer la modal en cliquant à l'extérieur
+            document.getElementById('meal-modal').addEventListener('click', function(e) {
+                if (e.target.id === 'meal-modal') {
+                    closeMealModal();
+                }
+            });
+            
+            renderMeals();
+        });
+
+        // Nettoyage automatique en fin de semaine
+        function cleanupOldMeals() {
+            const meals = loadMeals();
+            const currentWeek = getWeekOffset(new Date());
+            const updatedMeals = meals.filter(meal => {
+                const mealWeek = currentWeek + meal.weekOffset;
+                return mealWeek >= currentWeek;
+            });
+            saveMeals(updatedMeals);
+        }
+
+        // Exécuter le nettoyage le dimanche soir
+        const today = new Date();
+        if (today.getDay() === 0 && today.getHours() >= 22) {
+            cleanupOldMeals();
+        }
+    </script>
+</head>
+<body>
+	<div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar(false)"></div>
+	<button class="sidebar-toggle" aria-label="Ouvrir le menu" onclick="toggleSidebar(true)">☰ Menu</button>
+    <div class="app">
+        <aside class="sidebar card" aria-label="Navigation">
+			<button class="sidebar-close" aria-label="Fermer le menu" onclick="toggleSidebar(false)">✕</button>
+            <div class="brand">Maison • Gestion</div>
+            <nav>
+                <a href="index.html">Accueil</a>
+                <a href="taches.html">Tâches</a>
+                <a href="courses.html">Courses</a>
+                <a href="repas.html">Repas</a>
+                <a href="weather.html">Météo</a>
+            </nav>
+            <div class="separator" aria-hidden="true"></div>
+            <div class="sidebar-footer">
+                <div class="small">Thème</div>
+                <div class="theme-select-wrapper">
+                    <select id="theme-select" class="theme-select">
+                        <option value="system">Système</option>
+                        <option value="light">Clair</option>
+                        <option value="dark">Sombre</option>
+                    </select>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main">
+            <h1>Planification des repas</h1>
+
+            <section class="card">
+                <div class="meals-controls">
+                    <div class="week-navigation">
+                        <button id="prev-week" class="btn" onclick="changeWeek(-1)"><span>← Semaine précédente</span></button>
+                        <div class="week-display">
+                            <span id="week-display"></span>
+                            <select id="week-selector" class="week-selector">
+                                <option value="0">Cette semaine</option>
+                                <option value="1">Semaine prochaine</option>
+                            </select>
+                        </div>
+                        <button id="next-week" class="btn" onclick="changeWeek(1)"><span>Semaine suivante →</span></button>
+                    </div>
+                    <button id="add-meal-btn" class="btn"><span>+ Ajouter un repas</span></button>
+                </div>
+
+                <div id="meals-grid" class="meals-grid"></div>
+            </section>
+        </main>
+    </div>
+	<!-- Modal pour ajouter/modifier un repas -->
+    <div id="meal-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="meal-modal-title">Ajouter un repas</h2>
+                <button class="modal-close" onclick="closeMealModal()">×</button>
+            </div>
+            <form id="meal-form">
+                <input type="hidden" id="meal-id">
+                
+                <div class="select-container">
+                    <select id="meal-day" required>
+                        <option value="lundi">Lundi</option>
+                        <option value="mardi">Mardi</option>
+                        <option value="mercredi">Mercredi</option>
+                        <option value="jeudi">Jeudi</option>
+                        <option value="vendredi">Vendredi</option>
+                        <option value="samedi">Samedi</option>
+                        <option value="dimanche">Dimanche</option>
+                    </select>
+                    <label for="meal-day">Jour</label>
+                </div>
+                
+                <div class="select-container">
+                    <select id="meal-moment" required>
+                        <option value="midi">Midi</option>
+                        <option value="soir">Soir</option>
+                    </select>
+                    <label for="meal-moment">Moment</label>
+                </div>
+                
+                <div class="input-container">
+                    <input id="meal-text" type="text" placeholder=" " required>
+                    <label for="meal-text">Repas prévu</label>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeMealModal()">Annuler</button>
+                    <button type="submit" class="btn">Enregistrer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Gestion du thème pour cette page
+        (function(){
+            const sel = document.getElementById('theme-select');
+            const KEY = 'home_theme_v1';
+            function applyTheme(mode){
+                if(mode === 'system'){
+                    document.documentElement.removeAttribute('data-theme');
+                } else {
+                    document.documentElement.setAttribute('data-theme', mode);
+                }
+                localStorage.setItem(KEY, mode);
+            }
+            const saved = localStorage.getItem(KEY) || 'system';
+            sel.value = saved;
+            applyTheme(saved);
+            sel.addEventListener('change', e => applyTheme(e.target.value));
+        })();
+    </script>
+</body>
+</html>
