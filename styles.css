@@ -1968,120 +1968,53 @@ html[data-theme="dark"] .weather-compact{
 
 /* === MEALS – vue mobile par jour === */
 @media (max-width:780px){
-	.meals-grid{ display:none !important; }
-	.meals-mobile{ display:flex; flex-direction:column; gap:18px; }
+	.meals-grid{
+		display:grid !important;
+		overflow-x:auto;
+		-webkit-overflow-scrolling:touch;
+		scrollbar-width:thin;
+		padding-bottom:6px;
+	}
 
-	.mobile-day{
-		background:var(--panel);
-		border:1px solid var(--glass-border);
-		border-radius:18px;
-		padding:14px 16px 16px;
-		display:flex;
-		flex-direction:column;
-		gap:12px;
-		position:relative;
+	.meals-grid::-webkit-scrollbar{
+		height:6px;
 	}
-	.mobile-day.today{
-		box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 60%, transparent);
-	}
-	.mobile-day-header{
-		font-weight:700;
-		font-size:1rem;
-		letter-spacing:.5px;
-		text-transform:capitalize;
-		color:var(--text);
-	}
-	.mobile-day.today .mobile-day-header{
-		color:var(--accent);
-	}
-	.mobile-day-slots{
-		display:flex;
-		gap:12px;
-	}
-	.mobile-slot{
-		flex:1;
-		min-height:96px;
-		border:1px dashed var(--input-border);
-		border-radius:14px;
-		background:color-mix(in srgb,var(--panel) 85%, transparent);
-		padding:10px 10px 12px;
-		display:flex;
-		flex-direction:column;
-		justify-content:space-between;
-		position:relative;
-		transition:.25s background, .25s border-color;
-	}
-	.mobile-slot.has-meal{
-		border-style:solid;
-		border-color:color-mix(in srgb,var(--accent) 35%, var(--input-border));
-		background:color-mix(in srgb,var(--accent) 18%, var(--panel));
-	}
-	.mobile-slot.has-meal .slot-meal-text{
-		font-size:.8rem;
-		line-height:1.25;
-		font-weight:600;
-		word-break:break-word;
-	}
-	.slot-top{
-		display:flex;
-		justify-content:space-between;
-		align-items:center;
-		margin-bottom:6px;
-	}
-	.slot-moment{
-		font-size:.7rem;
-		text-transform:uppercase;
-		letter-spacing:.55px;
-		font-weight:700;
-		opacity:.7;
-	}
-	.mobile-slot.has-meal .slot-moment{
-		opacity:.9;
-	}
-	.slot-actions{
-		display:flex;
-		gap:6px;
-	}
-	.slot-btn{
-		width:30px;
-		height:30px;
-		border:0;
-		border-radius:10px;
-		background:linear-gradient(145deg,var(--accent),var(--accent-mix));
-		color:#fff;
-		font-size:.8rem;
-		cursor:pointer;
-		display:flex;
-		align-items:center;
-		justify-content:center;
-		transition:.2s opacity;
-	}
-	.slot-btn:hover{ opacity:.85; }
-
-	.slot-add-btn{
-		width:50px;
-		height:50px;
-		margin:4px auto 0;
-		border-radius:14px;
-		border:2px dashed var(--input-border);
+	.meals-grid::-webkit-scrollbar-track{
 		background:transparent;
-		color:var(--text);
-		font-size:1.6rem;
-		font-weight:600;
-		cursor:pointer;
-		display:flex;
-		align-items:center;
-		justify-content:center;
-		transition:.25s background, .25s border-color, .25s transform;
 	}
-	.slot-add-btn:active{ transform:scale(.9); }
-	.slot-add-btn:hover{
-		border-color:var(--accent);
-		background:color-mix(in srgb, var(--accent) 18%, transparent);
-		color:#fff;
+	.meals-grid::-webkit-scrollbar-thumb{
+		background:color-mix(in srgb,var(--accent) 40%, transparent);
+		border-radius:4px;
 	}
 
-	.mobile-day.today .mobile-slot:not(.has-meal){
-		border-color:color-mix(in srgb,var(--accent) 45%, var(--input-border));
+	/* Réduction des tailles pour lisibilité */
+	.day-header, .time-header, .moment-header, .meal-cell{
+		min-width:110px;
+		min-height:70px;
+		padding:10px 6px;
+		font-size:.72rem;
 	}
+
+	.moment-header{
+		font-size:.75rem;
+		padding-left:8px;
+	}
+
+	.meal-text{
+		font-size:.7rem;
+	}
+
+	.btn-small{
+		font-size:.55rem;
+		padding:4px 6px;
+	}
+
+	.btn-add-meal{
+		width:28px;
+		height:28px;
+		font-size:16px;
+	}
+
+	/* Masquer la vue mobile alternative si encore présente */
+	.meals-mobile{ display:none !important; }
 }

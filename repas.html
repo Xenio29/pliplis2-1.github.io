@@ -157,19 +157,14 @@
         	const grid = document.getElementById('meals-grid');
         	const mobile = document.getElementById('meals-mobile');
 
-        	if(isMobileMeals()){
-        		if(grid) grid.style.display='none';
-        		if(mobile) mobile.style.display='flex';
-        		renderMealsMobile(meals, weekOffset);
-        		updateWeekDisplay();
-        		return;
-        	}else{
-        		if(grid) grid.style.display='';
-        		if(mobile) mobile.style.display='none';
+        	/* MODIF: on force l'affichage de la grille aussi sur mobile */
+        	if(mobile) mobile.style.display='none';
+        	if(grid){
+        		grid.style.display='grid'; // restera visible
         	}
 
         	if(!grid) return;
-        	grid.innerHTML = ''; // reset avant reconstruction desktop
+        	grid.innerHTML = '';
 
         	// ENTETE
         	const headerRow = document.createElement('div');
@@ -208,10 +203,6 @@
         			const isNextMonday=i===7;
         			const cell=document.createElement('div');
         			cell.className='meal-cell';
-        			let mobileLabel = day.slice(0,3);
-        			mobileLabel = mobileLabel.charAt(0).toUpperCase()+mobileLabel.slice(1);
-        			if(isNextMonday) mobileLabel = 'Lun+1';
-        			cell.setAttribute('data-day', mobileLabel);
         			const meal = meals.find(m=>m.day===day && m.moment===moment && m.week_offset === (isNextMonday? weekOffset+1 : weekOffset));
         			if(meal){
         				cell.innerHTML = `
