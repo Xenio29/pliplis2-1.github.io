@@ -166,6 +166,29 @@ function addCourseFromForm(e) {
 	document.getElementById('course-form').reset();
 }
 
+/* === OVERRIDE addCourseFromForm (fix c_title undefined) === */
+window.addCourseFromForm = async function(e){
+	e.preventDefault();
+	const titleEl = document.getElementById('c-title');
+	const qtyEl   = document.getElementById('c-qty');
+	const catEl   = document.getElementById('c-category');
+	const noteEl  = document.getElementById('c-note');
+	if(!titleEl) return;
+	const title = titleEl.value.trim();
+	if(!title) return;
+
+	await createCourse({
+		title,
+		quantity: qtyEl ? qtyEl.value.trim() : '',
+		category: catEl && catEl.value ? catEl.value : 'Autres',
+		note: noteEl ? noteEl.value.trim() : '',
+		bought:false
+	});
+	e.target.reset();
+	if(typeof renderCourses==='function') await renderCourses(true);
+	if(typeof renderHome==='function') renderHome();
+};
+
 // Gestion du thème
 function applyTheme(mode) {
 	if (mode === 'system') {
@@ -677,14 +700,15 @@ addCourseFromForm = async function(e){
 	const qtyEl   = document.getElementById('c-qty');
 	const catEl   = document.getElementById('c-category');
 	const noteEl  = document.getElementById('c-note');
+	if(!titleEl) return;
 	const title = titleEl.value.trim();
 	if(!title) return;
 
 	await createCourse({
 		title,
-		quantity: qtyEl.value.trim(),
-		category: catEl.value || 'Autres',
-		note: noteEl.value.trim(),
+		quantity: qtyEl ? qtyEl.value.trim() : '',
+		category: catEl && catEl.value ? catEl.value : 'Autres',
+		note: noteEl ? noteEl.value.trim() : '',
 		bought:false
 	});
 	e.target.reset();
