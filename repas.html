@@ -135,6 +135,13 @@
         			const isNextMonday=i===7;
         			const cell=document.createElement('div');
         			cell.className='meal-cell';
+
+        			/* === AJOUT: label jour pour mobile === */
+        			let mobileLabel = day.slice(0,3);
+        			mobileLabel = mobileLabel.charAt(0).toUpperCase()+mobileLabel.slice(1);
+        			if(isNextMonday) mobileLabel = 'Lun+1';
+        			cell.setAttribute('data-day', mobileLabel);
+
         			const meal = meals.find(m=>m.day===day && m.moment===moment && m.week_offset === (isNextMonday? weekOffset+1 : weekOffset));
         			if(meal){
         				cell.innerHTML = `
@@ -153,6 +160,7 @@
         			else if(isPast(dayIndex, weekOffset) || (isNextMonday && weekOffset===0 && isPast(0,1))) cell.classList.add('past');
         			else if(isFuture(dayIndex, weekOffset) || isNextMonday) cell.classList.add('future');
         			if(isNextMonday) cell.classList.add('next-week');
+
         			row.appendChild(cell);
         		}
         		container.appendChild(row);

@@ -1956,37 +1956,37 @@ html[data-theme="dark"] .weather-compact{
 	}
 }
 
-/* Correction si wrapper utilisé simultanément (priorité explicite) */
+/* Correction si les deux variantes (wrapper + id) coexistent, on garde le shrink */
 .home-weather-section #home-weather .weather-compact{
-	padding:26px 26px 22px;
+	min-height:0;
 }
 
-/* === WEATHER HOME: suppression espace vide & meilleure répartition === */
-.home-weather-section{
-	/* avant: min-height:300px; créait un grand vide */
-	min-height:auto;
+/* === BADGE JOUR MOBILE POUR REPAS === */
+@media (max-width: 767px){
+	.meal-cell{
+		position:relative;
+		padding-top:26px; /* espace pour badge */
+	}
+	.meal-cell::before{
+		content: attr(data-day);
+		position:absolute;
+		top:6px;
+		left:10px;
+		font-size:.65rem;
+		font-weight:600;
+		letter-spacing:.5px;
+		opacity:.65;
+		text-transform:uppercase;
+		pointer-events:none;
+	}
+	.meal-cell.today::before{
+		color: var(--accent);
+		opacity:1;
+	}
+	.meal-cell.next-week::before{
+		color: var(--accent);
+	}
 }
-
-#home-weather .weather-compact{
-	min-height:0;            /* neutralise le 230px générique */
-	padding:24px 28px 26px;  /* vertical équilibré (avant 30 / 24) */
-	display:grid;
-	grid-template-columns: 1fr 1fr;
-	grid-auto-rows:auto;
-	column-gap:42px;
-	row-gap:26px;
-	align-items:start;
-	line-height:1.32;
-}
-
-#home-weather .weather-compact > .wc-header{
-	grid-column:1 / -1;
-	margin:0;
-	padding:0 0 8px;
-	border-bottom:1px solid color-mix(in srgb,var(--text) 14%, transparent);
-}
-
-#home-weather .weather-compact > .wc-block.wc-today{
 	grid-column:1;
 }
 
