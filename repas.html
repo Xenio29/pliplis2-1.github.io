@@ -150,84 +150,131 @@
         	}
         }
 
-        /* Rendu principal (desktop + bascule mobile) */
-        async function renderMeals(){
-        	const meals = await loadMeals();
-        	const weekOffset = parseInt(document.getElementById('week-selector').value,10);
-        	const grid = document.getElementById('meals-grid');
-        	const mobile = document.getElementById('meals-mobile');
-        	const vertical = document.getElementById('meals-vertical');
+        /* Vue verticale mobile : carte par jour avec 2 cases (midi / soir) */
+function renderMealsVertical(meals, weekOffset){
+	const wrap = document.getElementById('meals-vertical');
+	if(!wrap) return;
+	wrap.innerHTML = '';
+	for(let dayIndex=0; dayIndex<7; dayIndex++){
+		const day = DAYS[dayIndex];
+		const dateObj = getDateForDay(dayIndex, weekOffset);
+		const dateStr = dateObj.toLocaleDateString('fr-FR',{ weekday:'long', day:'numeric', month:'short' });
+		const card = document.createElement('div');
+		card.className = 'meal-day-card';
+		if(isToday(dayIndex, weekOffset)) card.classList.add('today');
+		else if(isPast(dayIndex, weekOffset)) card.classList.add('past');
+		else card.classList.add('future');
+		card.innerHTML = `<div class="meal-day-header">${dateStr.charAt(0).toUpperCase()+dateStr.slice(1)}</div>`;
+		const slots = document.createElement('div');
+		slots.className = 'meal-day-slots';
+		MOMENTS.forEach(moment=>{
+			const m = meals.find(x=>x.day===day && x.moment===moment && x.week_offset===weekOffset);
+			const slot = document.createElement('div');
+			slot.className = 'meal-slot'+(m?' has-meal':'');
+			if(isToday(dayIndex, weekOffset)) slot.classList.add('slot-today');
+			if(m){
+				slot.innerHTML = `
+					<div class="meal-slot-head">
+						<span class="meal-slot-label">${moment.charAt(0).toUpperCase()+moment.slice(1)}</span>
+						<div class="meal-slot-actions">
+							<button class="meal-slot-btn" onclick="editMeal('${m.id}')" title="Modifier">✏️</button>
+							<button class="meal-slot-btn" onclick="deleteMealApi('${m.id}')" title="Supprimer">🗑️</button>
+						</div>
+					</div>
+					<div class="meal-slot-text">${m.meal}</div>`;
+			}else{
+				slot.innerHTML = `
+					<div class="meal-slot-head">
+						<span class="meal-slot-label">${moment.charAt(0).toUpperCase()+moment.slice(1)}</span>
+					</div>
+					<button class="meal-slot-add" onclick="setMealDayAndMoment('${day}','${moment}',${weekOffset})" title="Ajouter">+</button>`;
+			}
+			slots.appendChild(slot);
+		});
+		card.appendChild(slots);
+		wrap.appendChild(card);
+	}
+}
 
-        	/* MODIF: on force l'affichage de la grille aussi sur mobile */
-        	if(mobile) mobile.style.display='none';
-        	if(grid){
-        		grid.style.display='grid'; // restera visible
-        	}
+/* Rendu principal (desktop + mobile vertical) */
+async function renderMeals(){
+	const meals = await loadMeals();
+	const weekOffset = parseInt(document.getElementById('week-selector').value,10);
+	const grid = document.getElementById('meals-grid');
+	const vertical = document.getElementById('meals-vertical');
 
-        	if(!grid) return;
-        	grid.innerHTML = '';
+	if(isMobileMeals()){
+		if(grid) grid.style.display='none';
+		if(vertical){ vertical.style.display='flex'; renderMealsVertical(meals, weekOffset); }
+		updateWeekDisplay();
+		return;
+	}else{
+		if(vertical) vertical.style.display='none';
+		if(grid) grid.style.display='grid';
+	}
+	if(!grid) return;
+	grid.innerHTML='';
 
-        	// ENTETE
-        	const headerRow = document.createElement('div');
-        	headerRow.className='meals-header';
-        	headerRow.innerHTML='<div class="time-header"></div>';
-        	for(let i=0;i<8;i++){
-        		const dayIndex = i % 7;
-        		const day = DAYS[dayIndex];
-        		const isNextMonday = i===7;
-        		const dayHeader=document.createElement('div');
-        		dayHeader.className='day-header';
-        		let date;
-        		if(isNextMonday){
-        			date = getDateForDay(0, weekOffset+1);
-        			dayHeader.innerHTML = `<div>Lundi</div><div class="date">${date.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})} (sem. suivante)</div>`;
-        			dayHeader.classList.add('next-week');
-        		}else{
-        			date = getDateForDay(dayIndex, weekOffset);
-        			dayHeader.innerHTML = `<div>${day.charAt(0).toUpperCase()+day.slice(1)}</div><div class="date">${date.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}</div>`;
-        		}
-        		if (isToday(dayIndex, weekOffset) && !isNextMonday) dayHeader.classList.add('today');
-        		else if (isPast(dayIndex, weekOffset) || (isNextMonday && weekOffset===0 && isPast(0,1))) dayHeader.classList.add('past');
-        		else if (isFuture(dayIndex, weekOffset) || isNextMonday) dayHeader.classList.add('future');
-        		headerRow.appendChild(dayHeader);
-        	}
-        	grid.appendChild(headerRow);
+	// ENTETE
+	const headerRow = document.createElement('div');
+	headerRow.className='meals-header';
+	headerRow.innerHTML='<div class="time-header"></div>';
+	for(let i=0;i<8;i++){
+		const dayIndex=i%7;
+		const day=DAYS[dayIndex];
+		const isNextMonday=i===7;
+		const dayHeader=document.createElement('div');
+		dayHeader.className='day-header';
+		let date;
+		if(isNextMonday){
+			date=getDateForDay(0,weekOffset+1);
+			dayHeader.innerHTML=`<div>Lundi</div><div class="date">${date.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})} (sem. suivante)</div>`;
+			dayHeader.classList.add('next-week');
+		}else{
+			date=getDateForDay(dayIndex,weekOffset);
+			dayHeader.innerHTML=`<div>${day.charAt(0).toUpperCase()+day.slice(1)}</div><div class="date">${date.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}</div>`;
+		}
+		if(isToday(dayIndex,weekOffset)&&!isNextMonday) dayHeader.classList.add('today');
+		else if(isPast(dayIndex,weekOffset)||(isNextMonday&&weekOffset===0&&isPast(0,1))) dayHeader.classList.add('past');
+		else if(isFuture(dayIndex,weekOffset)||isNextMonday) dayHeader.classList.add('future');
+		headerRow.appendChild(dayHeader);
+	}
+	grid.appendChild(headerRow);
 
-        	// LIGNES
-        	MOMENTS.forEach(moment=>{
-        		const row=document.createElement('div');
-        		row.className='meals-row';
-        		row.innerHTML=`<div class="moment-header">${moment.charAt(0).toUpperCase()+moment.slice(1)}</div>`;
-        		for(let i=0;i<8;i++){
-        			const dayIndex=i%7;
-        			const day=DAYS[dayIndex];
-        			const isNextMonday=i===7;
-        			const cell=document.createElement('div');
-        			cell.className='meal-cell';
-        			const meal = meals.find(m=>m.day===day && m.moment===moment && m.week_offset === (isNextMonday? weekOffset+1 : weekOffset));
-        			if(meal){
-        				cell.innerHTML = `
-        					<div class="meal-content">
-        						<span class="meal-text">${meal.meal}</span>
-        						<div class="meal-actions">
-        							<button class="btn-small" onclick="editMeal('${meal.id}')">✏️</button>
-        							<button class="btn-small" onclick="deleteMealApi('${meal.id}')">🗑️</button>
-        						</div>
-        					</div>`;
-        			}else{
-        				const targetWeekOffset = isNextMonday? weekOffset+1 : weekOffset;
-        				cell.innerHTML = `<button class="btn-add-meal" onclick="setMealDayAndMoment('${day}','${moment}',${targetWeekOffset})">+</button>`;
-        			}
-        			if(isToday(dayIndex, weekOffset) && !isNextMonday) cell.classList.add('today');
-        			else if(isPast(dayIndex, weekOffset) || (isNextMonday && weekOffset===0 && isPast(0,1))) cell.classList.add('past');
-        			else if(isFuture(dayIndex, weekOffset) || isNextMonday) cell.classList.add('future');
-        			if(isNextMonday) cell.classList.add('next-week');
-        			row.appendChild(cell);
-        		}
-        		grid.appendChild(row);
-        	});
-        	updateWeekDisplay();
-        }
+	// LIGNES
+	MOMENTS.forEach(moment=>{
+		const row=document.createElement('div');
+		row.className='meals-row';
+		row.innerHTML=`<div class="moment-header">${moment.charAt(0).toUpperCase()+moment.slice(1)}</div>`;
+		for(let i=0;i<8;i++){
+			const dayIndex=i%7;
+			const day=DAYS[dayIndex];
+			const isNextMonday=i===7;
+			const cell=document.createElement('div');
+			cell.className='meal-cell';
+			const meal = meals.find(m=>m.day===day && m.moment===moment && m.week_offset === (isNextMonday? weekOffset+1 : weekOffset));
+			if(meal){
+				cell.innerHTML=`<div class="meal-content">
+					<span class="meal-text">${meal.meal}</span>
+					<div class="meal-actions">
+						<button class="btn-small" onclick="editMeal('${meal.id}')">✏️</button>
+						<button class="btn-small" onclick="deleteMealApi('${meal.id}')">🗑️</button>
+					</div>
+				</div>`;
+			}else{
+				const targetWeekOffset=isNextMonday?weekOffset+1:weekOffset;
+				cell.innerHTML=`<button class="btn-add-meal" onclick="setMealDayAndMoment('${day}','${moment}',${targetWeekOffset})">+</button>`;
+			}
+			if(isToday(dayIndex,weekOffset)&&!isNextMonday) cell.classList.add('today');
+			else if(isPast(dayIndex,weekOffset)||(isNextMonday&&weekOffset===0&&isPast(0,1))) cell.classList.add('past');
+			else if(isFuture(dayIndex,weekOffset)||isNextMonday) cell.classList.add('future');
+			if(isNextMonday) cell.classList.add('next-week');
+			row.appendChild(cell);
+		}
+		grid.appendChild(row);
+	});
+	updateWeekDisplay();
+}
 
         function setMealDayAndMoment(day,moment,weekOffset=null){
         	openMealModal(day,moment,weekOffset);
