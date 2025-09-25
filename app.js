@@ -803,7 +803,7 @@ async function renderHomeMeals(){
 	if(!container) return;
 	container.innerHTML = '<div class="home-meal-date">Chargement des repas...</div>';
 	const meals = await getMealsCached();
-	const { byDay, order } = groupUpcomingMeals(meals, 7);
+	const { byDay, order } = groupUpcomingMeals(meals, 2); // <-- 2 jours seulement
 	if(!order.length){
 		container.innerHTML = '<div class="home-meal-date"><em>Aucun repas planifié.</em></div>';
 		return;
@@ -866,20 +866,18 @@ async function renderHomeTasks(){
 	if(!box) return;
 	box.innerHTML = '<div class="small">Chargement des tâches...</div>';
 	const tasks = await fetchTasks();
-	// Filtrer tâches en cours (non finies)
 	const active = tasks.filter(t=>!t.finished);
 	if(!active.length){
 		box.innerHTML = '<div class="small"><em>Aucune tâche en cours.</em></div>';
 		return;
 	}
-	// Calcul progression / tri (plus urgent d’abord)
 	const enriched = active.map(t=>{
 		const { progress, remainingDays } = progressPercent(t);
 		return { t, progress, remainingDays };
 	}).sort((a,b)=> a.remainingDays - b.remainingDays);
 
 	box.innerHTML = '';
-	enriched.slice(0,10).forEach(({t,progress,remainingDays})=>{
+	enriched.slice(0,3).forEach(({t,progress,remainingDays})=>{ // <-- 3 tâches max
 		const row = document.createElement('div');
 		row.className = 'home-task-row';
 		row.innerHTML = `
@@ -913,11 +911,14 @@ async function renderHomeCourses(){
 	pending.forEach(c=>{ (groups[c.category||'Autres'] = groups[c.category||'Autres'] || []).push(c); });
 	const orderedCats = Object.keys(groups).sort();
 	box.innerHTML = '';
-	orderedCats.forEach(cat=>{
+	let shown = 0;
+	for(const cat of orderedCats){
+		if(shown >= 4) break; // <-- max 4 articles
 		const catBlock = document.createElement('div');
 		catBlock.className = 'home-course-cat';
 		catBlock.innerHTML = `<div class="home-course-cat-title">${cat}</div>`;
-		groups[cat].slice(0,15).forEach(it=>{
+		for(const it of groups[cat]){
+			if(shown >= 4) break;
 			const line = document.createElement('div');
 			line.className = 'home-course-item';
 			line.innerHTML = `
@@ -927,9 +928,10 @@ async function renderHomeCourses(){
 				</label>
 			`;
 			catBlock.appendChild(line);
-		});
+			shown++;
+		}
 		box.appendChild(catBlock);
-	});
+	}
 }
 
 /* Styles minimalistes injectés si pas encore présents (évite modifier CSS si oublié) */
