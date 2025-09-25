@@ -80,8 +80,9 @@
 
         async function renderMeals(){
         	const meals = await loadMeals();
-        	const weekOffset = parseInt(week_selector.value);
+        	const weekOffset = parseInt(document.getElementById('week-selector').value,10); /* FIX */
         	const container = document.getElementById('meals-grid');
+        	if(!container) return;
         	container.innerHTML = '';
         	
         	// En-tête avec les jours (lundi à dimanche + lundi suivant)
@@ -217,6 +218,48 @@
             document.getElementById('prev-week').style.display = weekOffset > 0 ? 'block' : 'none';
             document.getElementById('next-week').style.display = weekOffset < 1 ? 'block' : 'none';
         }
+
+        /* === HELPERS MANQUANTS POUR LE RENDU DES DATES === */
+function getDateForDay(dayIndex, weekOffset = 0){
+	const today = new Date();
+	const currentDay = today.getDay(); // 0=dimanche
+	const deltaToMonday = currentDay === 0 ? -6 : (1 - currentDay);
+	const monday = new Date(today);
+	monday.setDate(today.getDate() + deltaToMonday + weekOffset*7);
+	const target = new Date(monday);
+	target.setDate(monday.getDate() + dayIndex);
+	target.setHours(0,0,0,0);
+	return target;
+}
+function isSameDay(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+function isToday(dayIndex, weekOffset=0){
+	return isSameDay(getDateForDay(dayIndex,weekOffset), new Date());
+}
+function isPast(dayIndex, weekOffset=0){
+	return getDateForDay(dayIndex,weekOffset) < (new Date(new Date().setHours(0,0,0,0)));
+}
+function isFuture(dayIndex, weekOffset=0){
+	return getDateForDay(dayIndex,weekOffset) > (new Date(new Date().setHours(0,0,0,0)));
+}
+function changeWeek(delta){
+	const sel = document.getElementById('week-selector');
+	let v = parseInt(sel.value,10);
+	v = Math.min(1, Math.max(0, v + delta)); // limité à 0 / 1 (options existantes)
+	sel.value = v;
+	renderMeals();
+}
+function closeMealModal(){
+	const mm = document.getElementById('meal-modal');
+	if(mm) mm.style.display='none';
+}
+
+/* Récup raccourcis éléments modal (sécurité si déjà utilisés) */
+const meal_modal = document.getElementById('meal-modal');
+const meal_day = document.getElementById('meal-day');
+const meal_moment = document.getElementById('meal-moment');
+const meal_text = document.getElementById('meal-text');
+const meal_id = document.getElementById('meal-id');
+const meal_modal_title = document.getElementById('meal-modal-title');
 
         // Initialisation
         document.addEventListener('DOMContentLoaded', function() {
