@@ -570,10 +570,18 @@ async function fetchMeals(){
 	const { data, error } = await supabaseClient
 		.from('meals')
 		.select('*')
-		.order('day',{ ascending:true })
-		.order('moment',{ ascending:true });
+		.order('id',{ ascending:true });
 	if(error){ console.warn('meals error', error); return []; }
-	return data;
+	return (data||[]).map(r=>{
+		const m = { ...r };
+		if(m.date_key){
+			const deriv = deriveDayAndOffsetFromKey(m.date_key);
+			m.day = deriv.day;
+			m.week_offset = deriv.week_offset;
+		}
+		if(typeof m.week_offset !== 'number') m.week_offset = 0;
+		return m;
+	});
 }
 
 async function loadDataAsync(){
@@ -719,24 +727,178 @@ addCourseFromForm = async function(e){
 /* ===== MEALS CRUD (Supabase) ===== */
 async function createMeal(day,moment,meal,week_offset){
 	if(!supabaseClient) return;
-	await supabaseClient.from('meals').insert([{day,moment,meal,week_offset}]);
+	const hasKey = await ensureMealsDateKeySupport();
+	const date_key = hasKey ? computeDateKeyFromForm(day, week_offset ?? 0) : undefined;
+	const payload = hasKey
+		? { day, moment, meal, week_offset, date_key }
+		: { day, moment, meal, week_offset };
+	await supabaseClient.from('meals').insert([payload]);
 }
 async function updateMeal(id,day,moment,meal,week_offset){
 	if(!supabaseClient) return;
-	await supabaseClient.from('meals').update({day,moment,meal,week_offset}).eq('id', id);
+	const hasKey = await ensureMealsDateKeySupport();
+	const date_key = hasKey ? computeDateKeyFromForm(day, week_offset ?? 0) : undefined;
+	const payload = hasKey
+		? { day, moment, meal, week_offset, date_key }
+		: { day, moment, meal, week_offset };
+	await supabaseClient.from('meals').update(payload).eq('id', id);
 }
 async function deleteMealApi(id){
 	if(!supabaseClient) return;
 	await supabaseClient.from('meals').delete().eq('id', id);
 }
+/* Mise à jour directe de la date_key (pour le rollover) */
+async function updateMealDateKeyOnly(id,newKey){
+	const hasKey = await ensureMealsDateKeySupport();
+	if(!supabaseClient || !hasKey) return;
+	await supabaseClient.from('meals').update({ date_key:newKey }).eq('id', id);
+}
 
-window.fetchMeals = fetchMeals;
-window.createMeal = createMeal;
-window.updateMeal = updateMeal;
-window.deleteMealApi = deleteMealApi;
-window.loadDataAsync = loadDataAsync;
+/* ===== Détection présence de la colonne meals.date_key ===== */
+let MEALS_HAS_DATE_KEY = null;
+async function ensureMealsDateKeySupport(){
+	if(!supabaseClient) { MEALS_HAS_DATE_KEY = false; return MEALS_HAS_DATE_KEY; }
+	if(MEALS_HAS_DATE_KEY !== null) return MEALS_HAS_DATE_KEY;
+	const { error } = await supabaseClient.from('meals').select('date_key').limit(1);
+	if(error){
+		// 42703 = undefined_column
+		MEALS_HAS_DATE_KEY = (error.code !== '42703' && !/column .*date_key.* does not exist/i.test(error.message||''));
+	}else{
+		MEALS_HAS_DATE_KEY = true;
+	}
+	return MEALS_HAS_DATE_KEY;
+}
 
-/* === MEALS HOMEPAGE UPCOMING === */
+// === Helpers date_key (repas) ===
+// Utilise MEALS_DAYS déjà défini plus bas pour cohérence [ 'lundi'..'dimanche' ]
+const DAY_INDEX = { lundi:0, mardi:1, mercredi:2, jeudi:3, vendredi:4, samedi:5, dimanche:6 };
+
+function pad2(n){ return n.toString().padStart(2,'0'); }
+function dateKeyFromDate(d){
+	const x = new Date(d); x.setHours(0,0,0,0);
+	return `${pad2(x.getDate())}${pad2(x.getMonth()+1)}${x.getFullYear()}`;
+}
+function dateFromDateKey(k){
+	// k = 'DDMMYYYY'
+	const dd = parseInt(k.slice(0,2),10);
+	const mm = parseInt(k.slice(2,4),10);
+	const yyyy = parseInt(k.slice(4,8),10);
+	const d = new Date(yyyy, mm-1, dd);
+	d.setHours(0,0,0,0);
+	return d;
+}
+// Lundi de la semaine de 'base'
+function mondayOf(base=new Date()){
+	const d = new Date(base);
+	const js = d.getDay(); // 0=dim,1=lun
+	const delta = js===0 ? -6 : (1-js);
+	d.setHours(0,0,0,0);
+	d.setDate(d.getDate()+delta);
+	return d;
+}
+// Calcule day/week_offset depuis date_key pour la vue 2 semaines
+function deriveDayAndOffsetFromKey(k){
+	const dt = dateFromDateKey(k);
+	const mon = mondayOf(new Date());
+	const nextMon = new Date(mon); nextMon.setDate(mon.getDate()+7);
+	let week_offset = 0;
+	if(dt < mon){
+		week_offset = Math.floor((dt - mon) / (7*24*3600*1000));
+	} else if (dt >= nextMon){
+		week_offset = Math.floor((dt - mon) / (7*24*3600*1000));
+	}
+	const dayIdx = (dt.getDay()+6)%7; // 0=lundi ... 6=dimanche
+	return { day: MEALS_DAYS ? MEALS_DAYS[dayIdx] : ['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'][dayIdx], week_offset };
+}
+// Déduit date_key à partir du (jour, week_offset) sélectionnés dans l'UI
+function computeDateKeyFromForm(day, week_offset=0){
+	const mon = mondayOf(new Date());
+	const d = new Date(mon);
+	d.setDate(d.getDate() + (week_offset*7) + (DAY_INDEX[day] ?? 0));
+	return dateKeyFromDate(d);
+}
+
+/* ================== RENDU ACCUEIL (TASKS, COURSES, MEALS) ================== */
+/* Conteneurs attendus dans index.html :
+   <div id="home-tasks-list"></div>
+   <div id="home-courses-list"></div>
+   <div id="home-upcoming-meals"></div>
+*/
+
+async function renderHomeTasks(){
+	const box = document.getElementById('home-tasks-list');
+	if(!box) return;
+	box.innerHTML = '<div class="small">Chargement des tâches...</div>';
+	const tasks = await fetchTasks();
+	const active = tasks.filter(t=>!t.finished);
+	if(!active.length){
+		box.innerHTML = '<div class="small"><em>Aucune tâche en cours.</em></div>';
+		return;
+	}
+	const enriched = active.map(t=>{
+		const { progress, remainingDays } = progressPercent(t);
+		return { t, progress, remainingDays };
+	}).sort((a,b)=> a.remainingDays - b.remainingDays);
+
+	box.innerHTML = '';
+	enriched.slice(0,3).forEach(({t,progress,remainingDays})=>{ // <-- 3 tâches max
+		const row = document.createElement('div');
+		row.className = 'home-task-row';
+		row.innerHTML = `
+			<div class="home-task-main">
+				<strong>${t.title}</strong>
+				<span class="home-task-meta">${remainingDays<=0?'À faire maintenant':('Restant: '+remainingDays+'j')}</span>
+			</div>
+			<div class="home-task-bar">
+				<div class="home-task-bar-fill" style="width:${progress}%;"></div>
+			</div>
+			<div class="home-task-actions">
+				<button class="btn-small" style="padding:4px 6px;font-size:.65rem;" onclick="markTaskToggle(${t.id})">✔</button>
+			</div>
+		`;
+		box.appendChild(row);
+	});
+}
+
+async function renderHomeCourses(){
+	const box = document.getElementById('home-courses-list');
+	if(!box) return;
+	box.innerHTML = '<div class="small">Chargement des courses...</div>';
+	const courses = await fetchCourses();
+	const pending = courses.filter(c=>!c.bought);
+	if(!pending.length){
+		box.innerHTML = '<div class="small"><em>Aucun article à acheter.</em></div>';
+		return;
+	}
+	// Regrouper par catégorie
+	const groups = {};
+	pending.forEach(c=>{ (groups[c.category||'Autres'] = groups[c.category||'Autres'] || []).push(c); });
+	const orderedCats = Object.keys(groups).sort();
+	box.innerHTML = '';
+	let shown = 0;
+	for(const cat of orderedCats){
+		if(shown >= 4) break; // <-- max 4 articles
+		const catBlock = document.createElement('div');
+		catBlock.className = 'home-course-cat';
+		catBlock.innerHTML = `<div class="home-course-cat-title">${cat}</div>`;
+		for(const it of groups[cat]){
+			if(shown >= 4) break;
+			const line = document.createElement('div');
+			line.className = 'home-course-item';
+			line.innerHTML = `
+				<label class="home-course-check">
+					<input type="checkbox" onchange="toggleBought(${it.id})">
+					<span>${it.title}${it.quantity? ' ('+it.quantity+')':''}</span>
+				</label>
+			`;
+			catBlock.appendChild(line);
+			shown++;
+		}
+		box.appendChild(catBlock);
+	}
+}
+
+/* === HOMEPAGE UPCOMING (déjà adapté via mealToDate ci-dessus) === */
 const MEALS_DAYS = ['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'];
 const MEAL_MOMENT_ORDER = { midi:0, soir:1 };
 let MEALS_CACHE_SUP = { ts:0, data:[] };
@@ -759,33 +921,17 @@ function mondayOfWeek(base = new Date()){
 }
 
 function mealToDate(meal){
+	if(meal.date_key){
+		return dateFromDateKey(meal.date_key);
+	}
+	// fallback legacy (day + week_offset)
 	const baseMonday = mondayOfWeek();
 	const dayIndex = MEALS_DAYS.indexOf(meal.day);
 	if(dayIndex < 0) return null;
 	const dt = new Date(baseMonday);
-	dt.setDate(dt.getDate() + meal.week_offset*7 + dayIndex);
+	dt.setDate(dt.getDate() + (meal.week_offset||0)*7 + dayIndex);
 	dt.setHours(meal.moment === 'midi' ? 11 : 18, 0, 0, 0);
 	return dt;
-}
-
-function groupUpcomingMeals(meals, daysAhead = 7){
-	const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
-	const end = new Date(todayMidnight); end.setDate(end.getDate()+daysAhead);
-	const filtered = meals
-		.map(m => ({...m, _date: mealToDate(m)}))
-		.filter(m => m._date && m._date >= todayMidnight && m._date < end)
-		.sort((a,b)=>{
-			if(a._date.getTime() === b._date.getTime()){
-				return MEAL_MOMENT_ORDER[a.moment]-MEAL_MOMENT_ORDER[b.moment];
-			}
-			return a._date - b._date;
-		});
-	const byDay = {};
-	filtered.forEach(m=>{
-		const key = m._date.toISOString().slice(0,10);
-		(byDay[key] = byDay[key] || []).push(m);
-	});
-	return { byDay, order:Object.keys(byDay).sort() };
 }
 
 function formatFrDateLabel(iso){

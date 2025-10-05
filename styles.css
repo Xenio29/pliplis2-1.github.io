@@ -1735,7 +1735,7 @@ html[data-theme="dark"] .sidebar {
 		radial-gradient(circle at 22% 28%, color-mix(in srgb,var(--accent) 24%, transparent) 0%, transparent 68%),
 		linear-gradient(150deg,
 			color-mix(in srgb,var(--panel) 90%, transparent),
-			color-mix(in srgb,var(--accent) 18%, var(--panel)));
+			color-mix(in srgb, var(--accent) 18%, var(--panel)));
 	border:1px solid color-mix(in srgb,var(--glass-border) 80%, transparent);
 	box-shadow:
 		0 14px 30px -14px rgba(0,0,0,.32),
