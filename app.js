@@ -570,18 +570,30 @@ async function fetchMeals(){
 	const { data, error } = await supabaseClient
 		.from('meals')
 		.select('*')
-		.order('id',{ ascending:true });
+		.order('date_key',{ ascending:true }); // Tri par date_key au lieu de id
 	if(error){ console.warn('meals error', error); return []; }
-	return (data||[]).map(r=>{
-		const m = { ...r };
-		if(m.date_key){
-			const deriv = deriveDayAndOffsetFromKey(m.date_key);
-			m.day = deriv.day;
-			m.week_offset = deriv.week_offset;
-		}
-		if(typeof m.week_offset !== 'number') m.week_offset = 0;
-		return m;
-	});
+	
+	const now = new Date();
+	const mon = mondayOf(now);
+	const nextMon = new Date(mon); nextMon.setDate(mon.getDate()+7);
+	const weekAfter = new Date(mon); weekAfter.setDate(mon.getDate()+14);
+	
+	return (data||[])
+		.filter(r => r.date_key) // Ignorer les anciens sans date_key
+		.map(r=>{
+			const m = { ...r };
+			const dt = dateFromDateKey(m.date_key);
+			
+			// Dériver day et week_offset pour compatibilité UI
+			let week_offset = -1; // par défaut = passé
+			if(dt >= mon && dt < nextMon) week_offset = 0;
+			else if(dt >= nextMon && dt < weekAfter) week_offset = 1;
+			
+			m.day = MEALS_DAYS[(dt.getDay()+6)%7]; // 0=lundi
+			m.week_offset = week_offset;
+			return m;
+		})
+		.filter(m => m.week_offset >= 0 && m.week_offset <= 1); // Vue 2 semaines
 }
 
 async function loadDataAsync(){
@@ -724,53 +736,50 @@ addCourseFromForm = async function(e){
 	if(typeof renderHome==='function') renderHome();
 };
 
-/* ===== MEALS CRUD (Supabase) ===== */
+/* ===== MEALS CRUD (Supabase) - Système pur date_key ===== */
 async function createMeal(day,moment,meal,week_offset){
 	if(!supabaseClient) return;
-	const hasKey = await ensureMealsDateKeySupport();
-	const date_key = hasKey ? computeDateKeyFromForm(day, week_offset ?? 0) : undefined;
-	const payload = hasKey
-		? { day, moment, meal, week_offset, date_key }
-		: { day, moment, meal, week_offset };
-	await supabaseClient.from('meals').insert([payload]);
+	const date_key = computeDateKeyFromForm(day, week_offset ?? 0);
+	await supabaseClient.from('meals').insert([{ moment, meal, date_key }]);
 }
+
 async function updateMeal(id,day,moment,meal,week_offset){
 	if(!supabaseClient) return;
-	const hasKey = await ensureMealsDateKeySupport();
-	const date_key = hasKey ? computeDateKeyFromForm(day, week_offset ?? 0) : undefined;
-	const payload = hasKey
-		? { day, moment, meal, week_offset, date_key }
-		: { day, moment, meal, week_offset };
-	await supabaseClient.from('meals').update(payload).eq('id', id);
+	const date_key = computeDateKeyFromForm(day, week_offset ?? 0);
+	await supabaseClient.from('meals').update({ moment, meal, date_key }).eq('id', id);
 }
+
 async function deleteMealApi(id){
 	if(!supabaseClient) return;
 	await supabaseClient.from('meals').delete().eq('id', id);
 }
-/* Mise à jour directe de la date_key (pour le rollover) */
-async function updateMealDateKeyOnly(id,newKey){
-	const hasKey = await ensureMealsDateKeySupport();
-	if(!supabaseClient || !hasKey) return;
-	await supabaseClient.from('meals').update({ date_key:newKey }).eq('id', id);
+
+/* === Rollover hebdomadaire === */
+const MEALS_ROLLOVER_KEY = 'meals_rollover_weekkey_v1';
+async function weeklyRolloverMeals(){
+	if(!supabaseClient) return;
+	
+	const now = new Date();
+	const mon = mondayOf(now);
+	const currentWeekKey = dateKeyFromDate(mon);
+	const lastKey = localStorage.getItem(MEALS_ROLLOVER_KEY);
+	if(lastKey === currentWeekKey) return; // déjà traité
+
+	// Nettoyage: supprimer repas > 2 semaines
+	const twoWeeksAgo = new Date(mon);
+	twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+	const cutoffKey = dateKeyFromDate(twoWeeksAgo);
+	
+	await supabaseClient
+		.from('meals')
+		.delete()
+		.lt('date_key', cutoffKey);
+
+	localStorage.setItem(MEALS_ROLLOVER_KEY, currentWeekKey);
 }
 
-/* ===== Détection présence de la colonne meals.date_key ===== */
-let MEALS_HAS_DATE_KEY = null;
-async function ensureMealsDateKeySupport(){
-	if(!supabaseClient) { MEALS_HAS_DATE_KEY = false; return MEALS_HAS_DATE_KEY; }
-	if(MEALS_HAS_DATE_KEY !== null) return MEALS_HAS_DATE_KEY;
-	const { error } = await supabaseClient.from('meals').select('date_key').limit(1);
-	if(error){
-		// 42703 = undefined_column
-		MEALS_HAS_DATE_KEY = (error.code !== '42703' && !/column .*date_key.* does not exist/i.test(error.message||''));
-	}else{
-		MEALS_HAS_DATE_KEY = true;
-	}
-	return MEALS_HAS_DATE_KEY;
-}
-
-// === Helpers date_key (repas) ===
-// Utilise MEALS_DAYS déjà défini plus bas pour cohérence [ 'lundi'..'dimanche' ]
+/* ===== Helpers date_key (repas) - À définir AVANT fetchMeals ===== */
+const MEALS_DAYS = ['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'];
 const DAY_INDEX = { lundi:0, mardi:1, mercredi:2, jeudi:3, vendredi:4, samedi:5, dimanche:6 };
 
 function pad2(n){ return n.toString().padStart(2,'0'); }
@@ -795,20 +804,6 @@ function mondayOf(base=new Date()){
 	d.setHours(0,0,0,0);
 	d.setDate(d.getDate()+delta);
 	return d;
-}
-// Calcule day/week_offset depuis date_key pour la vue 2 semaines
-function deriveDayAndOffsetFromKey(k){
-	const dt = dateFromDateKey(k);
-	const mon = mondayOf(new Date());
-	const nextMon = new Date(mon); nextMon.setDate(mon.getDate()+7);
-	let week_offset = 0;
-	if(dt < mon){
-		week_offset = Math.floor((dt - mon) / (7*24*3600*1000));
-	} else if (dt >= nextMon){
-		week_offset = Math.floor((dt - mon) / (7*24*3600*1000));
-	}
-	const dayIdx = (dt.getDay()+6)%7; // 0=lundi ... 6=dimanche
-	return { day: MEALS_DAYS ? MEALS_DAYS[dayIdx] : ['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'][dayIdx], week_offset };
 }
 // Déduit date_key à partir du (jour, week_offset) sélectionnés dans l'UI
 function computeDateKeyFromForm(day, week_offset=0){
@@ -898,8 +893,7 @@ async function renderHomeCourses(){
 	}
 }
 
-/* === HOMEPAGE UPCOMING (déjà adapté via mealToDate ci-dessus) === */
-const MEALS_DAYS = ['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'];
+/* === HOMEPAGE UPCOMING === */
 const MEAL_MOMENT_ORDER = { midi:0, soir:1 };
 let MEALS_CACHE_SUP = { ts:0, data:[] };
 const MEALS_CACHE_TTL = 30_000;
