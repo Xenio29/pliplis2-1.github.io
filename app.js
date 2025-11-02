@@ -570,30 +570,32 @@ async function fetchMeals(){
 	const { data, error } = await supabaseClient
 		.from('meals')
 		.select('*')
-		.order('date_key',{ ascending:true }); // Tri par date_key au lieu de id
+		.order('date_key',{ ascending:true });
 	if(error){ console.warn('meals error', error); return []; }
 	
 	const now = new Date();
-	const mon = mondayOf(now);
-	const nextMon = new Date(mon); nextMon.setDate(mon.getDate()+7);
-	const weekAfter = new Date(mon); weekAfter.setDate(mon.getDate()+14);
+	const sat = mondayOf(now); // Samedi de la semaine courante
+	const nextSat = new Date(sat); nextSat.setDate(sat.getDate()+7);
+	const weekAfter = new Date(sat); weekAfter.setDate(sat.getDate()+14);
 	
 	return (data||[])
-		.filter(r => r.date_key) // Ignorer les anciens sans date_key
+		.filter(r => r.date_key)
 		.map(r=>{
 			const m = { ...r };
 			const dt = dateFromDateKey(m.date_key);
 			
-			// Dériver day et week_offset pour compatibilité UI
-			let week_offset = -1; // par défaut = passé
-			if(dt >= mon && dt < nextMon) week_offset = 0;
-			else if(dt >= nextMon && dt < weekAfter) week_offset = 1;
+			let week_offset = -1;
+			if(dt >= sat && dt < nextSat) week_offset = 0;
+			else if(dt >= nextSat && dt < weekAfter) week_offset = 1;
 			
-			m.day = MEALS_DAYS[(dt.getDay()+6)%7]; // 0=lundi
+			// Calculer l'index du jour (0=samedi, 1=dimanche, ..., 6=vendredi)
+			const jsDay = dt.getDay(); // 0=dim, 6=sam
+			const dayIdx = jsDay === 6 ? 0 : jsDay + 1; // sam=0, dim=1, lun=2, etc.
+			m.day = MEALS_DAYS[dayIdx];
 			m.week_offset = week_offset;
 			return m;
 		})
-		.filter(m => m.week_offset >= 0 && m.week_offset <= 1); // Vue 2 semaines
+		.filter(m => m.week_offset >= 0 && m.week_offset <= 1);
 }
 
 async function loadDataAsync(){
@@ -779,8 +781,8 @@ async function weeklyRolloverMeals(){
 }
 
 /* ===== Helpers date_key (repas) - À définir AVANT fetchMeals ===== */
-const MEALS_DAYS = ['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'];
-const DAY_INDEX = { lundi:0, mardi:1, mercredi:2, jeudi:3, vendredi:4, samedi:5, dimanche:6 };
+const MEALS_DAYS = ['samedi','dimanche','lundi','mardi','mercredi','jeudi','vendredi']; // Commence par samedi
+const DAY_INDEX = { samedi:0, dimanche:1, lundi:2, mardi:3, mercredi:4, jeudi:5, vendredi:6 };
 
 function pad2(n){ return n.toString().padStart(2,'0'); }
 function dateKeyFromDate(d){
@@ -796,13 +798,14 @@ function dateFromDateKey(k){
 	d.setHours(0,0,0,0);
 	return d;
 }
-// Lundi de la semaine de 'base'
+// Samedi de la semaine de 'base' (au lieu de lundi)
 function mondayOf(base=new Date()){
 	const d = new Date(base);
-	const js = d.getDay(); // 0=dim,1=lun
-	const delta = js===0 ? -6 : (1-js);
+	const js = d.getDay(); // 0=dim,1=lun,...,6=sam
+	const deltaToSaturday = (6 - js); // Nombre de jours jusqu'au prochain samedi
+	const saturdayOffset = deltaToSaturday <= 0 ? deltaToSaturday - 7 : deltaToSaturday - 7; // Samedi de la semaine en cours
 	d.setHours(0,0,0,0);
-	d.setDate(d.getDate()+delta);
+	d.setDate(d.getDate() + saturdayOffset);
 	return d;
 }
 // Déduit date_key à partir du (jour, week_offset) sélectionnés dans l'UI

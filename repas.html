@@ -18,8 +18,8 @@
             { id: 4, day: 'mardi', moment: 'soir', meal: 'Poisson au four', weekOffset: 0 }
         ];
 
-        // Jours de la semaine (du lundi au dimanche)
-        const DAYS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+        // Jours de la semaine (du samedi au vendredi)
+        const DAYS = ['samedi','dimanche','lundi','mardi','mercredi','jeudi','vendredi'];
         const MOMENTS = ['midi', 'soir'];
 
         const MEALS_CACHE_REFRESH_MS = 30_000;
@@ -166,7 +166,7 @@
         		if(grid) grid.style.display='grid';
         	}
 
-        	// ...existing desktop grid rebuild (entête + lignes)...
+        	// Desktop grid rebuild (entête + lignes)
         	grid.innerHTML='';
         	const headerRow = document.createElement('div');
         	headerRow.className='meals-header';
@@ -174,21 +174,21 @@
         	for(let i=0;i<8;i++){
         		const dayIndex=i%7;
         		const day=DAYS[dayIndex];
-        		const isNextMonday=i===7;
+        		const isNextSaturday=i===7; // Samedi suivant au lieu de lundi suivant
         		const dayHeader=document.createElement('div');
         		dayHeader.className='day-header';
         		let date;
-        		if(isNextMonday){
-        			date=getDateForDay(0,weekOffset+1);
-        			dayHeader.innerHTML=`<div>Lundi</div><div class="date">${date.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})} (sem. suivante)</div>`;
+        		if(isNextSaturday){
+        			date=getDateForDay(0,weekOffset+1); // 0 = samedi
+        			dayHeader.innerHTML=`<div>Samedi</div><div class="date">${date.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})} (sem. suivante)</div>`;
         			dayHeader.classList.add('next-week');
         		}else{
         			date=getDateForDay(dayIndex,weekOffset);
         			dayHeader.innerHTML=`<div>${day.charAt(0).toUpperCase()+day.slice(1)}</div><div class="date">${date.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}</div>`;
         		}
-        		if(isToday(dayIndex,weekOffset)&&!isNextMonday) dayHeader.classList.add('today');
-        		else if(isPast(dayIndex,weekOffset)||(isNextMonday&&weekOffset===0&&isPast(0,1))) dayHeader.classList.add('past');
-        		else if(isFuture(dayIndex,weekOffset)||isNextMonday) dayHeader.classList.add('future');
+        		if(isToday(dayIndex,weekOffset)&&!isNextSaturday) dayHeader.classList.add('today');
+        		else if(isPast(dayIndex,weekOffset)||(isNextSaturday&&weekOffset===0&&isPast(0,1))) dayHeader.classList.add('past');
+        		else if(isFuture(dayIndex,weekOffset)||isNextSaturday) dayHeader.classList.add('future');
         		headerRow.appendChild(dayHeader);
         	}
         	grid.appendChild(headerRow);
@@ -200,10 +200,10 @@
         		for(let i=0;i<8;i++){
         			const dayIndex=i%7;
         			const day=DAYS[dayIndex];
-        			const isNextMonday=i===7;
+        			const isNextSaturday=i===7; // Samedi suivant
         			const cell=document.createElement('div');
         			cell.className='meal-cell';
-        			const meal = meals.find(m=>m.day===day && m.moment===moment && m.week_offset === (isNextMonday? weekOffset+1 : weekOffset));
+        			const meal = meals.find(m=>m.day===day && m.moment===moment && m.week_offset === (isNextSaturday? weekOffset+1 : weekOffset));
         			if(meal){
         				cell.innerHTML=`<div class="meal-content">
         					<span class="meal-text">${meal.meal}</span>
@@ -213,13 +213,13 @@
         					</div>
         				</div>`;
         			}else{
-        				const targetWeekOffset=isNextMonday?weekOffset+1:weekOffset;
+        				const targetWeekOffset=isNextSaturday?weekOffset+1:weekOffset;
         				cell.innerHTML=`<button class="btn-add-meal" onclick="setMealDayAndMoment('${day}','${moment}',${targetWeekOffset})">+</button>`;
         			}
-        			if(isToday(dayIndex,weekOffset)&&!isNextMonday) cell.classList.add('today');
-        			else if(isPast(dayIndex,weekOffset)||(isNextMonday&&weekOffset===0&&isPast(0,1))) cell.classList.add('past');
-        			else if(isFuture(dayIndex,weekOffset)||isNextMonday) cell.classList.add('future');
-        			if(isNextMonday) cell.classList.add('next-week');
+        			if(isToday(dayIndex,weekOffset)&&!isNextSaturday) cell.classList.add('today');
+        			else if(isPast(dayIndex,weekOffset)||(isNextSaturday&&weekOffset===0&&isPast(0,1))) cell.classList.add('past');
+        			else if(isFuture(dayIndex,weekOffset)||isNextSaturday) cell.classList.add('future');
+        			if(isNextSaturday) cell.classList.add('next-week');
         			row.appendChild(cell);
         		}
         		grid.appendChild(row);
@@ -236,16 +236,16 @@
             const weekOffset = parseInt(document.getElementById('week-selector').value);
             const weekDisplay = document.getElementById('week-display');
             
-            const startOfWeek = getDateForDay(0, weekOffset); // Lundi
-            const endOfWeek = getDateForDay(6, weekOffset); // Dimanche
-            const nextMonday = getDateForDay(0, weekOffset + 1); // Lundi suivant
+            const startOfWeek = getDateForDay(0, weekOffset); // Samedi
+            const endOfWeek = getDateForDay(6, weekOffset); // Vendredi
+            const nextSaturday = getDateForDay(0, weekOffset + 1); // Samedi suivant
             
             const startStr = startOfWeek.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
             const endStr = endOfWeek.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-            const nextMondayStr = nextMonday.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: weekOffset === 1 ? 'numeric' : undefined });
+            const nextSaturdayStr = nextSaturday.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: weekOffset === 1 ? 'numeric' : undefined });
             
             if (weekOffset === 0) {
-                weekDisplay.textContent = `Semaine du ${startStr} au ${endStr} + lundi ${nextMondayStr}`;
+                weekDisplay.textContent = `Semaine du ${startStr} au ${endStr} + samedi ${nextSaturdayStr}`;
             } else {
                 weekDisplay.textContent = `Semaine du ${startStr} au ${endStr}`;
             }
@@ -255,15 +255,17 @@
             document.getElementById('next-week').style.display = weekOffset < 1 ? 'block' : 'none';
         }
 
-        /* === HELPERS MANQUANTS POUR LE RENDU DES DATES === */
+        /* === HELPERS POUR LE RENDU DES DATES === */
 function getDateForDay(dayIndex, weekOffset = 0){
 	const today = new Date();
-	const currentDay = today.getDay(); // 0=dimanche
-	const deltaToMonday = currentDay === 0 ? -6 : (1 - currentDay);
-	const monday = new Date(today);
-	monday.setDate(today.getDate() + deltaToMonday + weekOffset*7);
-	const target = new Date(monday);
-	target.setDate(monday.getDate() + dayIndex);
+	const currentDay = today.getDay(); // 0=dimanche, 6=samedi
+	// Calculer le delta vers le samedi de la semaine courante
+	const deltaToSaturday = (6 - currentDay); // Jours jusqu'au prochain samedi
+	const saturdayOffset = deltaToSaturday <= 0 ? deltaToSaturday - 7 : deltaToSaturday - 7; // Samedi de cette semaine
+	const saturday = new Date(today);
+	saturday.setDate(today.getDate() + saturdayOffset + weekOffset*7);
+	const target = new Date(saturday);
+	target.setDate(saturday.getDate() + dayIndex);
 	target.setHours(0,0,0,0);
 	return target;
 }
@@ -296,7 +298,7 @@ function changeWeek(delta){
             document.getElementById('week-selector').addEventListener('change', renderMeals);
             document.getElementById('add-meal-btn').addEventListener('click', () => {
                 const currentWeek = parseInt(document.getElementById('week-selector').value,10);
-                openMealModal('lundi','midi', currentWeek);
+                openMealModal('samedi','midi', currentWeek); // Samedi au lieu de lundi
             });
             document.getElementById('meal-modal').addEventListener('click', e=>{
             	if(e.target.id==='meal-modal') closeMealModal();
@@ -386,13 +388,13 @@ function changeWeek(delta){
                 
                 <div class="select-container">
                     <select id="meal-day" required>
+                        <option value="samedi">Samedi</option>
+                        <option value="dimanche">Dimanche</option>
                         <option value="lundi">Lundi</option>
                         <option value="mardi">Mardi</option>
                         <option value="mercredi">Mercredi</option>
                         <option value="jeudi">Jeudi</option>
                         <option value="vendredi">Vendredi</option>
-                        <option value="samedi">Samedi</option>
-                        <option value="dimanche">Dimanche</option>
                     </select>
                     <label for="meal-day">Jour</label>
                 </div>
